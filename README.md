@@ -8,19 +8,20 @@ It is also a learning project for **WebSockets** and **WebRTC**.
 **Early development.** The project was restarted from scratch after the previous implementation
 was lost.
 
-**Implemented:** accounts and meetings through the REST API, with rate limiting. There is no user
-interface for them yet.
+**Implemented:** accounts and meetings through the REST API (with rate limiting), and a web interface
+for accounts. There is no web interface for meetings yet.
 **Not implemented yet:** everything under "Planned features".
 
 ## Features
 
 - Accounts: register, log in, log out, session refresh. See [Authentication](#authentication).
+- Web app: register, log in and log out screens, in English and Spanish. See [Web app](#web-app).
 - Meetings: schedule, edit, cancel and list meetings; invite registered users by email; invitees can
-  leave. See [Meetings](#meetings).
+  leave. See [Meetings](#meetings). Available through the REST API only for now.
 
 ## Planned features
 
-- A web interface for accounts and meetings.
+- Web screens for meetings (list, create, details, invitations).
 - Join a meeting as an audio call or a video call, with mute and camera controls.
 - Real-time presence and WebRTC signaling over WebSockets.
 - Room size: up to 10 participants for audio calls and 4 for video calls (configurable).
@@ -32,7 +33,7 @@ above the video participant limit.
 
 | Area             | Technology                                                                                   | In the code today     |
 | ---------------- | -------------------------------------------------------------------------------------------- | --------------------- |
-| Frontend         | React, Vite, TypeScript                                                                      | Yes (placeholder)     |
+| Frontend         | React, Vite, TypeScript, Tailwind CSS, React Router, i18next                                 | Yes (accounts)        |
 | Backend          | Node.js, Express, TypeScript                                                                 | Yes (health, auth)    |
 | WebSockets       | `ws`                                                                                         | Not yet               |
 | Database         | MySQL (local via Docker), `mysql2`                                                           | Yes (users, sessions) |
@@ -100,6 +101,25 @@ The REST API (base path `/api/v1/auth`) is described in [`apps/api/openapi.yaml`
   Behind a reverse proxy, set `TRUST_PROXY_HOPS` so limits apply to real client addresses.
 - **Not included yet:** email verification, password reset, multi-factor authentication.
 
+## Web app
+
+Run it with `npm run dev:web` (the API must be running too; see [Running](#running)). In development the
+Vite server proxies `/api` to the API, so the browser sees one origin and the refresh cookie works as in production.
+
+- **Screens:** log in, create account, and a signed-in start page (a placeholder until the meetings screens exist).
+- **Languages:** English and Spanish. The first visit uses the browser's language; the choice made with the
+  language selector is remembered in `localStorage` (a preference, not a secret). Every text is in
+  `apps/web/src/i18n/locales/`; a test fails if a text exists in only one language. API errors are shown with
+  translated texts chosen by error code, never with the API's own messages.
+- **Session:** the access token is kept in memory only (never in `localStorage`). When the page loads, the app asks
+  the API for a new access token using the `HttpOnly` refresh cookie, so a reload keeps the user signed in. Refresh
+  requests are serialized (also across tabs, where the browser supports the Web Locks API), because the API treats
+  a second use of an already-rotated cookie as theft and ends the session.
+- **Styling:** Tailwind CSS with a dark theme. Colors are tokens in `apps/web/src/index.css` with their contrast
+  ratios documented next to them.
+- **Accessibility:** labelled fields, errors linked to their field and announced, focus moved to the first invalid
+  field, a skip link, landmarks, and the page language following the selected language. Not yet tested with a screen reader.
+
 ## Meetings
 
 The REST API (base path `/api/v1/meetings`, also in [`apps/api/openapi.yaml`](apps/api/openapi.yaml)) needs
@@ -142,6 +162,10 @@ apps/api   Express API (and, later, the WebSocket signaling server)
            src/http          routes, middleware (validation, rate limits, auth), error handling
            openapi.yaml      API description
 apps/web   React single-page app
+           src/api     API client (typed errors, session refresh)
+           src/auth    session state, route guards, login/register form logic
+           src/i18n    English and Spanish texts, language detection
+           src/pages   screens; src/components shared UI pieces
 docker/    local MySQL account setup script
 ```
 
