@@ -9,9 +9,11 @@ It is also a learning project for **WebSockets** and **WebRTC**.
 was lost.
 
 **Implemented:** accounts and meetings, through the REST API (with rate limiting) and a web interface in
-English and Spanish; and the **signaling server** that calls will use (WebSocket, tickets, rooms).
-**Not implemented yet:** everything under "Planned features". In particular, the web app cannot join a
-call yet: the server side is ready and tested, the call screen (camera, microphone, WebRTC) is not built.
+English and Spanish; the **signaling server** (WebSocket, tickets, rooms); and the **call screen** (camera,
+microphone, one WebRTC connection per participant, mute and camera controls).
+**Not implemented yet:** everything under "Planned features". Calls have been tried with real browsers
+(Chrome) on one machine; they have not been tried across different networks, with a TURN server, or in
+Firefox and Safari.
 
 ## Features
 
@@ -21,10 +23,14 @@ call yet: the server side is ready and tested, the call screen (camera, micropho
 - Web app: screens for all of the above, in English and Spanish. See [Web app](#web-app).
 - Signaling server: the part of a call that goes through the server (who is in the call, and relaying
   the messages browsers need to connect to each other). See [Calls](#calls-signaling-server).
+- Call screen: join a meeting's call with camera and microphone (or microphone only), with mute and camera
+  controls. See [The call screen](#the-call-screen).
 
 ## Planned features
 
-- The call screen: join a meeting as an audio or video call, with mute and camera controls (WebRTC in the browser).
+- Public deployment (the web app as a static site, the API and database on free hosting), with a TURN server
+  for people behind restrictive networks.
+- Ending a meeting for everyone, and reconnecting automatically after a dropped connection.
 
 Out of scope for the first version: text chat, screen sharing, recording, guest access, video calls
 above the video participant limit.
@@ -87,6 +93,48 @@ npm run dev:api   # API on http://localhost:3000, health check at /api/v1/health
 npm run dev:web   # web app on http://localhost:5173, proxies /api to the API
 ```
 
+## Trying the app with test users
+
+Registering is limited to 5 accounts per hour per address, and a call needs at least two people, so the
+repository has a command that creates a ready-made set of accounts and meetings in your **local** database:
+
+```bash
+docker compose up -d --wait         # the database
+npm run migrate -w @meet-sync/api   # once, if you have not already
+npm run seed                        # creates the test accounts and meetings (safe to repeat)
+npm run dev:api                     # and, in another terminal, npm run dev:web
+```
+
+All five accounts use the password **`meetsync-dev-password`**. It is published here on purpose and is only
+meant for your own machine: the command refuses to run unless `NODE_ENV` is `development`, the database is on
+this machine, and it is not the automated tests' database. It is not part of the production build.
+
+| Account (`@example.test`) | Hosts                                                                    | Is invited to                                                        |
+| ------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| `ana`                     | stand-up, quarterly planning, lunch, retrospective, kick-off, 22 samples | check-in, design review, offsite                                     |
+| `ben`                     | check-in, offsite                                                        | stand-up, design review, quarterly planning, retrospective, kick-off |
+| `cleo`                    | design review                                                            | stand-up, check-in, quarterly planning, retrospective, offsite       |
+| `dan`                     | hiring sync (Ana cannot see it)                                          | stand-up, quarterly planning                                         |
+| `eli`                     | nothing                                                                  | stand-up, check-in, hiring sync                                      |
+
+The meetings cover every state, and each title says which one it is: _Joinable now_ (a video and an audio
+meeting that start in a few minutes), _In progress_, _Later_ (joining not open yet; one with nobody
+invited), _Finished_ (one over by time, one marked as ended), _Cancelled_, and 22 _Sample meeting_ entries
+that give Ana a second page of upcoming meetings. Times are relative to when you ran the command, so
+the "joinable now" meetings become "in progress" and then "finished": run `npm run seed` again to get fresh
+ones. It replaces the seed meetings and resets the accounts' names and passwords; meetings you made yourself
+are left alone.
+
+**To try a call**, use two browser profiles (or a normal and a private window): the session is per browser
+profile, so two tabs of one profile are the same person. Sign in as `ana@example.test` in one and
+`ben@example.test` in the other, open _Joinable now: team stand-up_ in both and press **Join call**. The
+stand-up has four invitees, so with four people in it the fifth (`eli`) is told the call is full. Without a
+camera, start Chrome with `--use-fake-device-for-media-stream --use-fake-ui-for-media-stream`. The camera
+works only on `localhost` or `https`.
+
+`npm run seed:remove` deletes the five accounts and **every meeting they host**, including ones you made
+with them by hand (a meeting cannot outlive its host).
+
 ## Authentication
 
 The REST API (base path `/api/v1/auth`) is described in [`apps/api/openapi.yaml`](apps/api/openapi.yaml).
@@ -116,8 +164,8 @@ Vite server proxies `/api` to the API, so the browser sees one origin and the re
   - Meeting details (`/meetings/:id`): the host can edit (until the meeting starts), cancel and invite
     (until it ends), and remove invitees; an invitee can leave. Cancelling and leaving ask for confirmation
     first. Invitee emails are visible to the host only.
-  - There is no Join button yet: the signaling server is ready, but the call screen (camera, microphone and the
-    browser's WebRTC connections) is not built.
+  - A **Join call** button appears on the meeting details from 15 minutes before the start until the end;
+    before that, the page says when joining opens. It opens the call screen (`/meetings/:id/call`).
 - **Times:** the form's date and time are read in the user's time zone and sent to the API as UTC; the buttons
   shown follow the same rules as the API, which stays the authority (a stale page gets a translated message).
 - **Languages:** English and Spanish. The first visit uses the browser's language; the choice made with the
@@ -175,10 +223,42 @@ uses are in [`apps/api/openapi.yaml`](apps/api/openapi.yaml).
   `TURN_SHARED_SECRET` are set, TURN credentials made for the user that expire after one hour. TURN is for
   people behind restrictive networks and is optional.
 - **Limits of this version:** rooms live in the memory of one API process, so a restart ends all calls
-  (browsers reconnect with a new ticket). A running call is not cut off at the meeting's end time; nobody new
+  (people are told the service is restarting and can rejoin from the screen). A running call is not cut off at the meeting's end time; nobody new
   can join after it. There is no "end the meeting for everyone" yet (cancelling ends the call).
 - **In development** the WebSocket goes through the same Vite proxy as REST. In production the browser must
-  connect directly to the API host, because Netlify cannot proxy WebSockets.
+  connect directly to the API host, because Netlify cannot proxy WebSockets: set `VITE_SIGNALING_URL` when
+  building the web app (see [The call screen](#the-call-screen)).
+
+## The call screen
+
+`/meetings/:id/call`, reached from the meeting details. The page has three states:
+
+1. **Lobby.** Choose "Join with camera and microphone" or "Join with microphone only" (an audio meeting
+   offers only the microphone). The browser asks for permission only after the choice. If joining is not open,
+   or the meeting is cancelled or over, the page says so.
+2. **In the call.** One tile per participant (name, and "Microphone off" / "Camera off" / connection problems
+   written out, not only drawn), a list that announces arrivals and departures politely, and the controls:
+   microphone, camera and leave. Your own tile is muted and mirrored.
+3. **Ended.** The reason is shown and read out (you left, you joined from another tab, the host removed you or
+   cancelled the meeting, the call is full, the service is restarting, the connection was lost), with a
+   **Rejoin** button when joining again can work.
+
+How it works, briefly:
+
+- Each participant keeps one WebRTC connection to every other participant (a _mesh_). The person who joins
+  sends an offer to each person already in the call and the others only answer, so two offers never cross.
+  Muting and turning the camera off switch the tracks off and tell the others; nothing is renegotiated.
+- Because every participant uploads a separate video to each of the others, the video bitrate per connection
+  is capped by room size: 800 kbps for one other person, 400 kbps in a full four-person room (down to a
+  150 kbps floor).
+- Leaving the screen, by any route, ends the call and releases the camera and microphone.
+- The call logic (`apps/web/src/calls/callSession.ts`) does not touch the browser directly: the camera, WebRTC
+  and WebSocket are passed in, which is how it is tested without a browser.
+- **Configuration:** `VITE_SIGNALING_URL` (for example `wss://api.example.com/api/v1/ws`), read when the web app
+  is built, is the WebSocket address of the API in production. Without it the address is derived from the page,
+  which is what the development proxy needs. See `apps/web/.env.example`.
+- **Limits of this version:** a dropped connection ends the call and the person rejoins by hand; there is no
+  device picker, screen sharing or chat; the mesh is meant for the room sizes above, not for more.
 
 ## Testing and quality checks
 
@@ -208,12 +288,14 @@ apps/api   Express API and the WebSocket signaling server
            src/services      business rules (authentication, password hashing, tokens, meetings)
            src/http          routes, middleware (validation, rate limits, auth), error handling
            src/signaling     WebSocket gateway, rooms, tickets, ICE servers (STUN/TURN credentials)
+           src/seed          development-only test accounts and meetings (`npm run seed`)
            openapi.yaml      API description
 apps/web   React single-page app
            src/api     API client (typed errors, session refresh)
            src/auth    session state, route guards, login/register form logic
            src/i18n    English and Spanish texts, language detection
            src/meetings  meeting forms, dates and time zones, validation, data loading
+           src/calls   the call: camera and WebRTC logic, signaling connection, tiles and controls
            src/forms   shared form logic (validation, field problems, submission)
            src/pages   screens; src/components shared UI pieces
 packages/signaling-protocol   WebSocket message schemas and types shared by the API and the web app
@@ -232,3 +314,8 @@ is not rolled back and must be fixed by hand.
 
 Do not commit secrets. `.env` files are git-ignored; only `.env.example` files with placeholder
 values are committed.
+
+The one deliberate exception is the password of the development test accounts (see
+[Trying the app with test users](#trying-the-app-with-test-users)). It protects nothing: the accounts exist
+only in a developer's own local database, the seed command refuses to run against any other, and it is left
+out of the production build.
