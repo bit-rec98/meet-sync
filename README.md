@@ -52,13 +52,22 @@ above the video participant limit.
 git clone https://github.com/bit-rec98/meet-sync.git
 cd meet-sync
 npm ci
-cp .env.example .env     # then replace every placeholder password in .env
+cp .env.example .env          # then replace every placeholder password in .env
 docker compose up -d --wait   # starts MySQL on 127.0.0.1:3307
+npm run migrate -w @meet-sync/api   # creates the schema in the development database
 ```
 
-Configuration is documented in [`.env.example`](.env.example). The API currently reads only
-`NODE_ENV` and `API_PORT`; the MySQL variables are used by `docker-compose.yml` and will be
-read by the API when database access is implemented.
+Configuration is documented in [`.env.example`](.env.example). Required variables have no default;
+the API refuses to start if one is missing or invalid.
+
+The local database has three accounts, created on the first start of the container:
+
+- **Runtime account** (`DB_USER`): used by the API; can only read and write rows, cannot change the schema.
+- **Migration account** (`DB_MIGRATION_USER`): used only by `npm run migrate`; full rights on the application and test databases.
+- **Root** (`DB_ROOT_PASSWORD`): used only inside the container.
+
+The account setup script runs only when the data volume is created. After changing database names or
+passwords in `.env`, recreate the volume with `docker compose down -v` (this deletes local data).
 
 ## Running
 
@@ -70,24 +79,36 @@ npm run dev:web   # web app on http://localhost:5173, proxies /api to the API
 ## Testing and quality checks
 
 ```bash
-npm test             # unit and integration tests in all workspaces
+npm test             # all workspaces; the API tests need the MySQL container running
 npm run lint
 npm run typecheck
 npm run format:check # npm run format to fix
 npm run build
 ```
 
-The same checks run in CI (`.github/workflows/ci.yml`), plus `npm audit`.
+API tests run against a separate database (`DB_TEST_NAME`, default `meet_sync_test`): the test run
+applies the migrations to it and deletes its rows between tests, and refuses to run against a database
+whose name does not end in `_test`. The same checks run in CI (`.github/workflows/ci.yml`), plus `npm audit`.
 
 ## Project structure
 
 ```text
 apps/api   Express API (and, later, the WebSocket signaling server)
+           src/config  environment parsing and validation
+           src/db      connection pool, migration runner, SQL migrations
 apps/web   React single-page app
+docker/    local MySQL account setup script
 ```
 
-Planned: a shared `packages/signaling-protocol` workspace for WebSocket message schemas, and
-SQL migrations in the API, added when those features are implemented.
+Planned: a shared `packages/signaling-protocol` workspace for WebSocket message schemas, added with the signaling server.
+
+## Database migrations
+
+Migrations are numbered SQL files in `apps/api/src/db/migrations/` applied in order by
+`npm run migrate -w @meet-sync/api` (in a built deployment: `npm run migrate:prod -w @meet-sync/api` after `npm run build`).
+Applied files are recorded with a checksum in `schema_migrations`; editing an applied migration is rejected, so
+add a new numbered file instead. MySQL commits schema changes immediately, so a migration that fails part-way
+is not rolled back and must be fixed by hand.
 
 ## Security
 

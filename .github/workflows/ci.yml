@@ -18,6 +18,23 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - name: Create .env with random throwaway credentials for the CI database
+        run: |
+          {
+            echo "NODE_ENV=test"
+            echo "API_PORT=3000"
+            echo "DB_HOST=127.0.0.1"
+            echo "DB_PORT=3307"
+            echo "DB_NAME=meet_sync"
+            echo "DB_TEST_NAME=meet_sync_test"
+            echo "DB_USER=meet_sync_app"
+            echo "DB_PASSWORD=$(openssl rand -hex 16)"
+            echo "DB_MIGRATION_USER=meet_sync_migrator"
+            echo "DB_MIGRATION_PASSWORD=$(openssl rand -hex 16)"
+            echo "DB_ROOT_PASSWORD=$(openssl rand -hex 16)"
+          } > .env
+      - name: Start MySQL (same setup as local development)
+        run: docker compose up -d --wait
       - run: npm run format:check
       - run: npm run lint
       - run: npm run typecheck
