@@ -9,9 +9,9 @@ It is also a learning project for **WebSockets** and **WebRTC**.
 was lost.
 
 **Implemented:** accounts and meetings, through the REST API (with rate limiting) and a web interface in
-English and Spanish.
-**Not implemented yet:** everything under "Planned features". In particular there are no calls yet:
-meetings can be scheduled and managed, but not joined.
+English and Spanish; and the **signaling server** that calls will use (WebSocket, tickets, rooms).
+**Not implemented yet:** everything under "Planned features". In particular, the web app cannot join a
+call yet: the server side is ready and tested, the call screen (camera, microphone, WebRTC) is not built.
 
 ## Features
 
@@ -19,12 +19,12 @@ meetings can be scheduled and managed, but not joined.
 - Meetings: schedule, edit, cancel and list meetings; invite registered users by email; invitees can
   leave. See [Meetings](#meetings).
 - Web app: screens for all of the above, in English and Spanish. See [Web app](#web-app).
+- Signaling server: the part of a call that goes through the server (who is in the call, and relaying
+  the messages browsers need to connect to each other). See [Calls](#calls-signaling-server).
 
 ## Planned features
 
-- Join a meeting as an audio call or a video call, with mute and camera controls.
-- Real-time presence and WebRTC signaling over WebSockets.
-- Room size: up to 10 participants for audio calls and 4 for video calls (configurable).
+- The call screen: join a meeting as an audio or video call, with mute and camera controls (WebRTC in the browser).
 
 Out of scope for the first version: text chat, screen sharing, recording, guest access, video calls
 above the video participant limit.
@@ -35,7 +35,7 @@ above the video participant limit.
 | ---------------- | -------------------------------------------------------------------------------------------- | --------------------- |
 | Frontend         | React, Vite, TypeScript, Tailwind CSS, React Router, i18next                                 | Yes (accounts)        |
 | Backend          | Node.js, Express, TypeScript                                                                 | Yes (health, auth)    |
-| WebSockets       | `ws`                                                                                         | Not yet               |
+| WebSockets       | `ws`, shared message schemas in `packages/signaling-protocol`                                | Yes (signaling)       |
 | Database         | MySQL (local via Docker), `mysql2`                                                           | Yes (users, sessions) |
 | Real-time media  | WebRTC (peer-to-peer mesh)                                                                   | Not yet               |
 | Frontend hosting | Netlify (the backend runs on a separate host that supports long-lived WebSocket connections) | Not yet               |
@@ -116,7 +116,8 @@ Vite server proxies `/api` to the API, so the browser sees one origin and the re
   - Meeting details (`/meetings/:id`): the host can edit (until the meeting starts), cancel and invite
     (until it ends), and remove invitees; an invitee can leave. Cancelling and leaving ask for confirmation
     first. Invitee emails are visible to the host only.
-  - There is no Join button yet: calls need the WebSocket server, which is not built.
+  - There is no Join button yet: the signaling server is ready, but the call screen (camera, microphone and the
+    browser's WebRTC connections) is not built.
 - **Times:** the form's date and time are read in the user's time zone and sent to the API as UTC; the buttons
   shown follow the same rules as the API, which stays the authority (a stale page gets a translated message).
 - **Languages:** English and Spanish. The first visit uses the browser's language; the choice made with the
@@ -146,8 +147,38 @@ a valid access token on every route.
   (status `cancelled`, listed under `past`) and is allowed until the meeting is over.
 - **Invitations:** by the exact email of a registered user, up to 50 invitees per meeting, 30 invitation
   requests per hour per user.
-- **Joining:** the rule exists in the service (`assertCanJoin`: from 15 minutes before the start until the
-  end, for host and invitees of a scheduled meeting); the real-time part that uses it is not implemented yet.
+- **Joining:** the rule is `assertCanJoin`: from 15 minutes before the start until the end, for the host and
+  invitees of a scheduled meeting. The signaling server applies it when issuing a ticket and again when a
+  participant joins (see [Calls](#calls-signaling-server)).
+
+## Calls (signaling server)
+
+Audio and video travel directly between the participants' browsers (WebRTC) and never through the server.
+The server's part is **signaling**: deciding who may join, telling participants who is in the call, and
+relaying the small messages browsers need to connect to each other. The full protocol is in
+[`packages/signaling-protocol/README.md`](packages/signaling-protocol/README.md); the two HTTP endpoints it
+uses are in [`apps/api/openapi.yaml`](apps/api/openapi.yaml).
+
+- **Joining:** a browser asks `POST /api/v1/ws-tickets` for a single-use ticket (valid 30 seconds), then opens
+  `/api/v1/ws?ticket=...`. Only the host and invitees of a scheduled meeting can get a ticket, from 15 minutes
+  before the start until the end. Access is checked again when the participant sends `join`.
+- **Rooms:** at most 10 people in an audio meeting and 4 in a video meeting (`MAX_PARTICIPANTS_AUDIO`,
+  `MAX_PARTICIPANTS_VIDEO`). Each person has one place per meeting: joining again, from another tab or after a
+  dropped connection, replaces the older connection.
+- **Isolation:** messages are delivered only inside one room, and the sender is always set by the server; a
+  client that names a sender or sends anything outside the protocol is disconnected.
+- **Changes through the REST API apply to live calls:** cancelling a meeting ends its call, and removing an
+  invitee (or an invitee leaving) disconnects them.
+- **Protection:** messages are limited to 64 KiB, each connection has a message rate limit, silent
+  connections are dropped, and a connection must join within 10 seconds. Tickets and call content are never logged.
+- **ICE servers:** `GET /api/v1/ice-servers` returns STUN servers (`STUN_URLS`) and, when `TURN_URLS` and
+  `TURN_SHARED_SECRET` are set, TURN credentials made for the user that expire after one hour. TURN is for
+  people behind restrictive networks and is optional.
+- **Limits of this version:** rooms live in the memory of one API process, so a restart ends all calls
+  (browsers reconnect with a new ticket). A running call is not cut off at the meeting's end time; nobody new
+  can join after it. There is no "end the meeting for everyone" yet (cancelling ends the call).
+- **In development** the WebSocket goes through the same Vite proxy as REST. In production the browser must
+  connect directly to the API host, because Netlify cannot proxy WebSockets.
 
 ## Testing and quality checks
 
@@ -163,15 +194,20 @@ API tests run against a separate database (`DB_TEST_NAME`, default `meet_sync_te
 applies the migrations to it and deletes its rows between tests, and refuses to run against a database
 whose name does not end in `_test`. The same checks run in CI (`.github/workflows/ci.yml`), plus `npm audit`.
 
+The shared protocol package is compiled, and `npm test`, `npm run typecheck`, `npm run dev:api` and
+`npm run dev:web` build it first. If you run a single workspace's scripts directly, run
+`npm run build:protocol` once beforehand.
+
 ## Project structure
 
 ```text
-apps/api   Express API (and, later, the WebSocket signaling server)
+apps/api   Express API and the WebSocket signaling server
            src/config        environment parsing and validation
            src/db            connection pool, transactions, migration runner, SQL migrations
            src/repositories  SQL access (parameterized queries only)
            src/services      business rules (authentication, password hashing, tokens, meetings)
            src/http          routes, middleware (validation, rate limits, auth), error handling
+           src/signaling     WebSocket gateway, rooms, tickets, ICE servers (STUN/TURN credentials)
            openapi.yaml      API description
 apps/web   React single-page app
            src/api     API client (typed errors, session refresh)
@@ -180,10 +216,9 @@ apps/web   React single-page app
            src/meetings  meeting forms, dates and time zones, validation, data loading
            src/forms   shared form logic (validation, field problems, submission)
            src/pages   screens; src/components shared UI pieces
+packages/signaling-protocol   WebSocket message schemas and types shared by the API and the web app
 docker/    local MySQL account setup script
 ```
-
-Planned: a shared `packages/signaling-protocol` workspace for WebSocket message schemas, added with the signaling server.
 
 ## Database migrations
 

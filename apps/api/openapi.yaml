@@ -3,7 +3,9 @@ info:
   title: MeetSync API
   version: 0.1.0
   description: |
-    REST API of MeetSync. Covers authentication, meetings and invitees, and a health check.
+    REST API of MeetSync. Covers authentication, meetings and invitees, what a browser needs to join a call
+    (a ticket for the signaling WebSocket and the ICE servers), and a health check. The WebSocket itself
+    (`/api/v1/ws`) is not an HTTP API and is described in `packages/signaling-protocol/README.md`.
 
     **Meetings.** All meeting routes need `Authorization: Bearer <token>`. A meeting is visible only to its
     host and invitees: anyone else gets `404`, exactly as for a meeting that does not exist. Only the host
@@ -25,6 +27,7 @@ tags:
   - name: Health
   - name: Authentication
   - name: Meetings
+  - name: Calls
 paths:
   /health:
     get:
@@ -452,6 +455,83 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+  /ws-tickets:
+    post:
+      tags: [Calls]
+      summary: Get a ticket to open the signaling WebSocket
+      description: |
+        Applies the rule for joining a call: the caller must be the host or an invitee of a meeting that is
+        scheduled and inside the join window (from 15 minutes before the start until the end). Anyone else
+        gets the same `404` as for a meeting that does not exist.
+
+        The ticket is for `wss://<api host>/api/v1/ws?ticket=<ticket>`. It is valid for 30 seconds and works
+        once. The WebSocket protocol is described in `packages/signaling-protocol/README.md`. Limited to
+        30 requests per minute per user (shared with `/ice-servers`).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WsTicketRequest'
+      responses:
+        '201':
+          description: A ticket for one connection.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WsTicketResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/BearerUnauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: |
+            `invalid_state`: the meeting is cancelled, or the join window is not open (too early, or the
+            meeting is over).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: invalid_state
+                  message: The meeting is not in a state that allows this action.
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /ice-servers:
+    get:
+      tags: [Calls]
+      summary: ICE servers for a peer connection
+      description: |
+        STUN servers, and a TURN server when one is configured. TURN credentials are made for the caller and
+        expire one hour after they are issued; the secret they are derived from is never sent.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The `iceServers` to give to `RTCPeerConnection`.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IceServersResponse'
+        '401':
+          $ref: '#/components/responses/BearerUnauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
 components:
   parameters:
     MeetingId:
@@ -889,3 +969,44 @@ components:
           maxLength: 254
           description: Trimmed and lower-cased by the server.
           example: guest@example.com
+    WsTicketRequest:
+      type: object
+      additionalProperties: false
+      required: [meetingId]
+      properties:
+        meetingId:
+          type: string
+          format: uuid
+    WsTicketResponse:
+      type: object
+      required: [ticket, expiresInSeconds]
+      properties:
+        ticket:
+          type: string
+          description: Opaque and single-use. Pass it as the `ticket` query parameter of the WebSocket address.
+        expiresInSeconds:
+          type: integer
+          example: 30
+    IceServer:
+      type: object
+      required: [urls]
+      properties:
+        urls:
+          type: array
+          items:
+            type: string
+          example: ['stun:stun.example.com:3478']
+        username:
+          type: string
+          description: Only for TURN. Contains the expiry time and the user, e.g. `1893456000:<user id>`.
+        credential:
+          type: string
+          description: Only for TURN. Valid until the time in `username`.
+    IceServersResponse:
+      type: object
+      required: [iceServers]
+      properties:
+        iceServers:
+          type: array
+          items:
+            $ref: '#/components/schemas/IceServer'
