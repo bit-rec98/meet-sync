@@ -1,18 +1,15 @@
 import type { Response } from 'express';
-import type { DomainErrorCode } from '../errors.js';
+import type { DomainErrorCode, FieldIssue } from '../errors.js';
 
 export type HttpErrorCode =
   | DomainErrorCode
-  | 'validation_error'
-  | 'forbidden'
-  | 'not_found'
   | 'payload_too_large'
   | 'unsupported_media_type'
   | 'rate_limited'
   | 'internal_error';
 
 /** Points at the offending field and the rule it broke. Never contains the submitted value. */
-export type ErrorDetail = { path: string; code: string };
+export type ErrorDetail = FieldIssue;
 
 /** An error raised by the HTTP layer itself (as opposed to a business rule, see DomainError). */
 export class HttpError extends Error {
@@ -34,6 +31,10 @@ const MESSAGES: Record<HttpErrorCode, string> = {
   validation_error: 'Invalid request.',
   forbidden: 'You do not have permission to do this.',
   not_found: 'Resource not found.',
+  user_not_found: 'No registered user has this email.',
+  already_invited: 'This user is already part of the meeting.',
+  invitee_limit_reached: 'The meeting has reached its maximum number of invitees.',
+  invalid_state: 'The meeting is not in a state that allows this action.',
   payload_too_large: 'Request body is too large.',
   unsupported_media_type: 'Content-Type must be application/json.',
   rate_limited: 'Too many requests. Try again later.',
@@ -45,6 +46,13 @@ const DOMAIN_ERROR_STATUS: Record<DomainErrorCode, number> = {
   invalid_credentials: 401,
   unauthorized: 401,
   email_taken: 409,
+  validation_error: 400,
+  forbidden: 403,
+  not_found: 404,
+  user_not_found: 404,
+  already_invited: 409,
+  invitee_limit_reached: 409,
+  invalid_state: 409,
 };
 
 export const statusForDomainError = (code: DomainErrorCode): number => DOMAIN_ERROR_STATUS[code];

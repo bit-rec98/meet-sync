@@ -26,7 +26,7 @@ export function createErrorHandler(log: Logger): ErrorRequestHandler {
       return;
     }
     if (error instanceof DomainError) {
-      sendError(res, statusForDomainError(error.code), error.code);
+      sendError(res, statusForDomainError(error.code), error.code, error.details);
       return;
     }
 
