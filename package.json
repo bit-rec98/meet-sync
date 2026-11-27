@@ -8,6 +8,7 @@
     "node": ">=26"
   },
   "workspaces": [
+    "packages/*",
     "apps/*"
   ],
   "scripts": {
@@ -18,7 +19,12 @@
     "test": "npm run test --workspaces",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "build:protocol": "npm run build -w @meet-sync/signaling-protocol",
+    "pretest": "npm run build:protocol",
+    "pretypecheck": "npm run build:protocol",
+    "predev:api": "npm run build:protocol",
+    "predev:web": "npm run build:protocol"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

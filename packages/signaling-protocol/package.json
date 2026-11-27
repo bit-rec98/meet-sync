@@ -1,0 +1,23 @@
+{
+  "name": "@meet-sync/signaling-protocol",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Messages exchanged between the web app and the signaling server, as schemas and types.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  }
+}
