@@ -10,7 +10,9 @@ import {
   type RateLimitSettings,
 } from './http/middleware/rateLimits.js';
 import { createAuthRouter } from './http/routes/authRoutes.js';
+import { createMeetingRouter } from './http/routes/meetingRoutes.js';
 import { createAuthService } from './services/authService.js';
+import { createMeetingService } from './services/meetingService.js';
 import { createAccessTokenService } from './services/tokens.js';
 
 export type AppDependencies = {
@@ -34,6 +36,8 @@ export function createApp({
     accessTokens: createAccessTokenService(config.accessTokenSecret),
     now,
   });
+  const meetings = createMeetingService({ pool, now });
+  const limiters = createRateLimiters(rateLimits);
 
   const app = express();
   app.disable('x-powered-by');
@@ -51,12 +55,13 @@ export function createApp({
     '/api/v1/auth',
     createAuthRouter({
       auth,
-      limiters: createRateLimiters(rateLimits),
+      limiters,
       webOrigins: config.webOrigins,
       secureCookies: config.secureCookies,
       now,
     }),
   );
+  app.use('/api/v1/meetings', createMeetingRouter({ auth, meetings, limiters }));
 
   app.use(handleNotFound);
   app.use(createErrorHandler(log));

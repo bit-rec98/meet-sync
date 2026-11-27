@@ -15,6 +15,7 @@ export const LENIENT_RATE_LIMITS: RateLimitSettings = {
   loginPerIp: NO_PRACTICAL_LIMIT,
   loginPerEmail: NO_PRACTICAL_LIMIT,
   refresh: NO_PRACTICAL_LIMIT,
+  invite: NO_PRACTICAL_LIMIT,
 };
 
 export type TestContext = {

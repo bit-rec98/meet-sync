@@ -1,4 +1,4 @@
-import type { Request, RequestHandler } from 'express';
+import type { Request, RequestHandler, Response } from 'express';
 import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
 import { sendError } from '../errorResponse.js';
 
@@ -9,6 +9,7 @@ export type RateLimitSettings = {
   loginPerIp: RateLimitRule;
   loginPerEmail: RateLimitRule;
   refresh: RateLimitRule;
+  invite: RateLimitRule;
 };
 
 const MINUTE_MS = 60 * 1000;
@@ -22,6 +23,7 @@ export const DEFAULT_RATE_LIMITS: RateLimitSettings = {
   loginPerIp: { windowMs: 15 * MINUTE_MS, limit: 10 },
   loginPerEmail: { windowMs: 15 * MINUTE_MS, limit: 5 },
   refresh: { windowMs: 15 * MINUTE_MS, limit: 30 },
+  invite: { windowMs: 60 * MINUTE_MS, limit: 30 },
 };
 
 export type RateLimiters = {
@@ -29,6 +31,7 @@ export type RateLimiters = {
   loginPerIp: RequestHandler;
   loginPerEmail: RequestHandler;
   refresh: RequestHandler;
+  invite: RequestHandler;
 };
 
 const MAX_EMAIL_KEY_LENGTH = 254;
@@ -49,9 +52,21 @@ function emailOrClientKey(req: Request): string {
   return clientKey(req);
 }
 
+/**
+ * Keys the counter by the authenticated user, so one account cannot spam invitations from many
+ * addresses. Must run after `requireAuth`; without a user it falls back to the client address.
+ */
+function userOrClientKey(req: Request, res: Response): string {
+  const userId: unknown = res.locals['userId'];
+  return typeof userId === 'string' ? `user:${userId}` : clientKey(req);
+}
+
 function limiter(
   rule: RateLimitRule,
-  options: { keyGenerator: (req: Request) => string; countOnlyFailures?: boolean },
+  options: {
+    keyGenerator: (req: Request, res: Response) => string;
+    countOnlyFailures?: boolean;
+  },
 ): RequestHandler {
   return rateLimit({
     windowMs: rule.windowMs,
@@ -77,5 +92,6 @@ export function createRateLimiters(settings: RateLimitSettings): RateLimiters {
       countOnlyFailures: true,
     }),
     refresh: limiter(settings.refresh, { keyGenerator: clientKey }),
+    invite: limiter(settings.invite, { keyGenerator: userOrClientKey }),
   };
 }

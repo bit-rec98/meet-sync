@@ -27,3 +27,7 @@ export function parseBody<S extends z.ZodType>(schema: S, body: unknown): z.outp
   if (result.success) return result.data;
   throw new HttpError(400, 'validation_error', toErrorDetails(result.error));
 }
+
+/** Same validation and error format for path parameters and query strings. */
+export const parseParams = parseBody;
+export const parseQuery = parseBody;

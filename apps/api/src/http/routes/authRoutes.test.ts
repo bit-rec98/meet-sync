@@ -395,6 +395,7 @@ describe('rate limiting', () => {
     loginPerIp: lenient,
     loginPerEmail: lenient,
     refresh: lenient,
+    invite: lenient,
     ...overrides,
   });
 

@@ -4,7 +4,7 @@ export const MIN_PASSWORD_LENGTH = 12;
 export const MAX_PASSWORD_LENGTH = 128;
 
 /** Trimmed, lower-cased, valid format, at most 254 characters. */
-const emailSchema = z.string().trim().toLowerCase().pipe(z.email().max(254));
+export const emailSchema = z.string().trim().toLowerCase().pipe(z.email().max(254));
 
 /** Trimmed, 1-60 characters, no control characters (newlines, tabs, NUL...). */
 const displayNameSchema = z

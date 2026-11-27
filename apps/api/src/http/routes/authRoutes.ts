@@ -1,6 +1,7 @@
 import { Router, type Response } from 'express';
 import { DomainError } from '../../errors.js';
 import type { AuthService } from '../../services/authService.js';
+import { noStore } from '../middleware/noStore.js';
 import { originAllowlist } from '../middleware/originAllowlist.js';
 import type { RateLimiters } from '../middleware/rateLimits.js';
 import { getAuthenticatedUserId, requireAuth } from '../middleware/requireAuth.js';
@@ -27,11 +28,7 @@ export function createAuthRouter({
   const router = Router();
   const onlyAllowedOrigins = originAllowlist(webOrigins);
 
-  // These responses carry tokens, so they must never be stored by browsers or proxies.
-  router.use((_req, res, next) => {
-    res.set('Cache-Control', 'no-store');
-    next();
-  });
+  router.use(noStore); // these responses carry tokens
 
   const setCookie = (res: Response, token: string, expiresAt: Date): void => {
     setRefreshCookie(res, token, {
