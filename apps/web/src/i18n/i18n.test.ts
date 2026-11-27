@@ -37,10 +37,16 @@ describe('translations', () => {
 
 describe('createI18n', () => {
   it('translates in the requested language and interpolates values', () => {
-    expect(createI18n('en').t('home.greeting', { name: 'Ana' })).toBe('Welcome, Ana');
-    expect(createI18n('es').t('home.greeting', { name: 'Ana' })).toBe(
-      'Te damos la bienvenida, Ana',
-    );
+    expect(createI18n('en').t('nav.signedInAs', { name: 'Ana' })).toBe('Signed in as Ana');
+    expect(createI18n('es').t('nav.signedInAs', { name: 'Ana' })).toBe('Sesión iniciada como Ana');
+  });
+
+  it('chooses singular and plural forms by count in both languages', () => {
+    expect(createI18n('en').t('meetings.invitees', { count: 1 })).toBe('1 invitee');
+    expect(createI18n('en').t('meetings.invitees', { count: 0 })).toBe('0 invitees');
+    expect(createI18n('en').t('meetings.invitees', { count: 5 })).toBe('5 invitees');
+    expect(createI18n('es').t('meetings.invitees', { count: 1 })).toBe('1 invitado');
+    expect(createI18n('es').t('meetings.invitees', { count: 5 })).toBe('5 invitados');
   });
 
   it('keeps the html lang attribute in step with the language', async () => {
@@ -52,7 +58,7 @@ describe('createI18n', () => {
 
   it('does not treat markup in interpolated values specially', () => {
     // React escapes when rendering; the i18n layer must not double-escape names such as "A & B".
-    expect(createI18n('en').t('home.greeting', { name: 'A & B' })).toBe('Welcome, A & B');
+    expect(createI18n('en').t('nav.signedInAs', { name: 'A & B' })).toBe('Signed in as A & B');
   });
 });
 
