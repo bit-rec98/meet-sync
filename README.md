@@ -8,20 +8,20 @@ It is also a learning project for **WebSockets** and **WebRTC**.
 **Early development.** The project was restarted from scratch after the previous implementation
 was lost.
 
-**Implemented:** accounts and meetings through the REST API (with rate limiting), and a web interface
-for accounts. There is no web interface for meetings yet.
-**Not implemented yet:** everything under "Planned features".
+**Implemented:** accounts and meetings, through the REST API (with rate limiting) and a web interface in
+English and Spanish.
+**Not implemented yet:** everything under "Planned features". In particular there are no calls yet:
+meetings can be scheduled and managed, but not joined.
 
 ## Features
 
 - Accounts: register, log in, log out, session refresh. See [Authentication](#authentication).
-- Web app: register, log in and log out screens, in English and Spanish. See [Web app](#web-app).
 - Meetings: schedule, edit, cancel and list meetings; invite registered users by email; invitees can
-  leave. See [Meetings](#meetings). Available through the REST API only for now.
+  leave. See [Meetings](#meetings).
+- Web app: screens for all of the above, in English and Spanish. See [Web app](#web-app).
 
 ## Planned features
 
-- Web screens for meetings (list, create, details, invitations).
 - Join a meeting as an audio call or a video call, with mute and camera controls.
 - Real-time presence and WebRTC signaling over WebSockets.
 - Room size: up to 10 participants for audio calls and 4 for video calls (configurable).
@@ -106,7 +106,19 @@ The REST API (base path `/api/v1/auth`) is described in [`apps/api/openapi.yaml`
 Run it with `npm run dev:web` (the API must be running too; see [Running](#running)). In development the
 Vite server proxies `/api` to the API, so the browser sees one origin and the refresh cookie works as in production.
 
-- **Screens:** log in, create account, and a signed-in start page (a placeholder until the meetings screens exist).
+- **Screens:**
+  - Log in and create account.
+  - The meetings list (`/`): upcoming and past views and pages are kept in the address, so the back button
+    and bookmarks work. Each meeting shows its time in the user's own time zone, duration, call type, role
+    (host or invitee) and, when relevant, "In progress", "Finished" or "Cancelled".
+  - Schedule (`/meetings/new`) and edit (`/meetings/:id/edit`) with one shared form. An edit sends only the
+    fields that changed.
+  - Meeting details (`/meetings/:id`): the host can edit (until the meeting starts), cancel and invite
+    (until it ends), and remove invitees; an invitee can leave. Cancelling and leaving ask for confirmation
+    first. Invitee emails are visible to the host only.
+  - There is no Join button yet: calls need the WebSocket server, which is not built.
+- **Times:** the form's date and time are read in the user's time zone and sent to the API as UTC; the buttons
+  shown follow the same rules as the API, which stays the authority (a stale page gets a translated message).
 - **Languages:** English and Spanish. The first visit uses the browser's language; the choice made with the
   language selector is remembered in `localStorage` (a preference, not a secret). Every text is in
   `apps/web/src/i18n/locales/`; a test fails if a text exists in only one language. API errors are shown with
@@ -165,6 +177,8 @@ apps/web   React single-page app
            src/api     API client (typed errors, session refresh)
            src/auth    session state, route guards, login/register form logic
            src/i18n    English and Spanish texts, language detection
+           src/meetings  meeting forms, dates and time zones, validation, data loading
+           src/forms   shared form logic (validation, field problems, submission)
            src/pages   screens; src/components shared UI pieces
 docker/    local MySQL account setup script
 ```
