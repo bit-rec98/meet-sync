@@ -8,17 +8,19 @@ It is also a learning project for **WebSockets** and **WebRTC**.
 **Early development.** The project was restarted from scratch after the previous implementation
 was lost.
 
-**Implemented:** accounts through the REST API (register, log in, refresh, log out, current user)
-with rate limiting; there is no user interface for them yet.
-**Not implemented yet:** everything else under "Planned features".
+**Implemented:** accounts and meetings through the REST API, with rate limiting. There is no user
+interface for them yet.
+**Not implemented yet:** everything under "Planned features".
 
 ## Features
 
-- Implemented: accounts (register, log in, log out, session refresh). See [Authentication](#authentication).
+- Accounts: register, log in, log out, session refresh. See [Authentication](#authentication).
+- Meetings: schedule, edit, cancel and list meetings; invite registered users by email; invitees can
+  leave. See [Meetings](#meetings).
 
 ## Planned features
 
-- Schedule, edit, cancel, and list meetings; invite registered users (invited users only, no guests).
+- A web interface for accounts and meetings.
 - Join a meeting as an audio call or a video call, with mute and camera controls.
 - Real-time presence and WebRTC signaling over WebSockets.
 - Room size: up to 10 participants for audio calls and 4 for video calls (configurable).
@@ -98,6 +100,23 @@ The REST API (base path `/api/v1/auth`) is described in [`apps/api/openapi.yaml`
   Behind a reverse proxy, set `TRUST_PROXY_HOPS` so limits apply to real client addresses.
 - **Not included yet:** email verification, password reset, multi-factor authentication.
 
+## Meetings
+
+The REST API (base path `/api/v1/meetings`, also in [`apps/api/openapi.yaml`](apps/api/openapi.yaml)) needs
+a valid access token on every route.
+
+- **Who can see and change what:** a meeting is visible only to its host and invitees; anyone else gets
+  `404`, the same answer as for a meeting that does not exist. Only the host can edit, cancel or invite
+  (an invitee gets `403`). Invitees can view the meeting and remove themselves. Invitee emails are shown only to the host.
+- **Times:** ISO 8601, stored and returned in UTC. A start time cannot be in the past (one minute of
+  tolerance) or more than a year ahead. Duration: 5 to 480 minutes. Call type: `audio` or `video`.
+- **Editing:** only while the meeting is scheduled and before it starts. Cancelling keeps the meeting
+  (status `cancelled`, listed under `past`) and is allowed until the meeting is over.
+- **Invitations:** by the exact email of a registered user, up to 50 invitees per meeting, 30 invitation
+  requests per hour per user.
+- **Joining:** the rule exists in the service (`assertCanJoin`: from 15 minutes before the start until the
+  end, for host and invitees of a scheduled meeting); the real-time part that uses it is not implemented yet.
+
 ## Testing and quality checks
 
 ```bash
@@ -119,7 +138,7 @@ apps/api   Express API (and, later, the WebSocket signaling server)
            src/config        environment parsing and validation
            src/db            connection pool, transactions, migration runner, SQL migrations
            src/repositories  SQL access (parameterized queries only)
-           src/services      business rules (authentication, password hashing, tokens)
+           src/services      business rules (authentication, password hashing, tokens, meetings)
            src/http          routes, middleware (validation, rate limits, auth), error handling
            openapi.yaml      API description
 apps/web   React single-page app

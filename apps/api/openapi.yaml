@@ -3,8 +3,11 @@ info:
   title: MeetSync API
   version: 0.1.0
   description: |
-    REST API of MeetSync. Currently covers authentication and a health check; meetings are not
-    implemented yet.
+    REST API of MeetSync. Covers authentication, meetings and invitees, and a health check.
+
+    **Meetings.** All meeting routes need `Authorization: Bearer <token>`. A meeting is visible only to its
+    host and invitees: anyone else gets `404`, exactly as for a meeting that does not exist. Only the host
+    can edit, cancel or invite (an invitee gets `403`). Times are ISO 8601 in UTC.
 
     **Authentication model.** `register` and `login` return a short-lived access token (JWT, 15 minutes)
     in the body and set a refresh token in an `HttpOnly` cookie. Send the access token as
@@ -13,14 +16,15 @@ info:
     **Errors** always use the shape of the `ErrorResponse` schema. Messages are generic and never include
     submitted values.
 
-    **Rate limits** apply to register, login and refresh (see each operation); exceeded limits answer
-    `429` with a `Retry-After` header.
+    **Rate limits** apply to register, login, refresh and inviting (see each operation); exceeded limits
+    answer `429` with a `Retry-After` header.
 servers:
   - url: /api/v1
     description: Same origin as the web app (Netlify proxies /api to the API host in production).
 tags:
   - name: Health
   - name: Authentication
+  - name: Meetings
 paths:
   /health:
     get:
@@ -198,7 +202,266 @@ paths:
                 error:
                   code: unauthorized
                   message: Authentication required.
+  /meetings:
+    post:
+      tags: [Meetings]
+      summary: Create a meeting
+      description: |
+        The caller becomes the host. `startsAt` must not be in the past (one minute of clock skew is
+        tolerated) and at most one year ahead. Unknown fields (for example `hostId` or `status`) are rejected.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMeetingRequest'
+      responses:
+        '201':
+          description: The meeting was created.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meeting'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/BearerUnauthorized'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+    get:
+      tags: [Meetings]
+      summary: List my meetings
+      description: |
+        Meetings the user hosts or is invited to. `upcoming` is every scheduled meeting that has not ended
+        yet (including one in progress), soonest first. `past` is everything else (ended, cancelled, or
+        scheduled but over), most recent first. A meeting is over from its end time on.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: when
+          in: query
+          schema:
+            type: string
+            enum: [upcoming, past]
+            default: upcoming
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 1000000
+            default: 0
+      responses:
+        '200':
+          description: One page of meetings.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeetingList'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/BearerUnauthorized'
+  /meetings/{id}:
+    parameters:
+      - $ref: '#/components/parameters/MeetingId'
+    get:
+      tags: [Meetings]
+      summary: Get a meeting
+      description: |
+        The host also sees the email of each invitee; invitees see only display names.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The meeting.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meeting'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/BearerUnauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Meetings]
+      summary: Edit a meeting
+      description: |
+        Host only, and only while the meeting is scheduled and has not started (`409` otherwise). Send any
+        subset of the fields; `description: null` clears the description. The host and the status cannot be
+        changed.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMeetingRequest'
+      responses:
+        '200':
+          description: The updated meeting.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meeting'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/BearerUnauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+    delete:
+      tags: [Meetings]
+      summary: Cancel a meeting
+      description: |
+        Host only. The meeting is kept and shows as `cancelled` (it appears under `past`). Cancelling an
+        already cancelled meeting succeeds; a meeting that has ended or whose time is over answers `409`.
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: The meeting is cancelled.
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/BearerUnauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /meetings/{id}/invitees:
+    parameters:
+      - $ref: '#/components/parameters/MeetingId'
+    post:
+      tags: [Meetings]
+      summary: Invite a registered user
+      description: |
+        Host only, for a meeting that is scheduled and not over. The user is found by exact email (trimmed,
+        case-insensitive). This reveals to the host whether that email has an account. At most 50 invitees
+        per meeting. Limited to 30 requests per hour per user (failed attempts count).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddInviteeRequest'
+      responses:
+        '201':
+          description: The user was invited.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invitee'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/BearerUnauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: |
+            `not_found`: the meeting is missing or not visible to the caller. `user_not_found`: no registered
+            user has this email.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: user_not_found
+                  message: No registered user has this email.
+        '409':
+          description: |
+            `already_invited`: the user is the host or already invited. `invitee_limit_reached`: the meeting
+            has 50 invitees. `invalid_state`: the meeting is cancelled or over.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: already_invited
+                  message: This user is already part of the meeting.
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /meetings/{id}/invitees/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/MeetingId'
+      - name: userId
+        in: path
+        required: true
+        description: The id of the invited user.
+        schema:
+          type: string
+          format: uuid
+    delete:
+      tags: [Meetings]
+      summary: Remove an invitee
+      description: |
+        The host can remove any invitee. An invitee can remove only themselves (`403` for anyone else) and
+        then loses access to the meeting. Allowed whatever the state of the meeting.
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: The invitee was removed.
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/BearerUnauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 components:
+  parameters:
+    MeetingId:
+      name: id
+      in: path
+      required: true
+      description: The id of the meeting.
+      schema:
+        type: string
+        format: uuid
   securitySchemes:
     bearerAuth:
       type: http
@@ -267,8 +530,49 @@ components:
             error:
               code: unauthorized
               message: Authentication required.
+    BearerUnauthorized:
+      description: Missing, malformed, invalid or expired access token. The reason is never disclosed.
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+            const: Bearer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: unauthorized
+              message: Authentication required.
+    NotFound:
+      description: |
+        The meeting does not exist, or the caller is neither its host nor an invitee (the two cases are
+        indistinguishable), or the user to remove is not an invitee.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: not_found
+              message: Resource not found.
+    Conflict:
+      description: |
+        `invalid_state`: the meeting is not in a state that allows this (for example it has started, was
+        cancelled, or is over).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: invalid_state
+              message: The meeting is not in a state that allows this action.
     Forbidden:
-      description: The request's `Origin` is not an allowed web origin.
+      description: |
+        The request is not allowed. For refresh and logout: its `Origin` is not an allowed web origin. For
+        meetings: the caller is an invitee, not the host (or tries to remove another invitee).
       content:
         application/json:
           schema:
@@ -381,6 +685,10 @@ components:
                 - forbidden
                 - not_found
                 - email_taken
+                - user_not_found
+                - already_invited
+                - invitee_limit_reached
+                - invalid_state
                 - payload_too_large
                 - unsupported_media_type
                 - rate_limited
@@ -400,3 +708,184 @@ components:
                   code:
                     type: string
                     description: The rule that failed, for example `too_small` or `invalid_format`.
+    CallType:
+      type: string
+      enum: [audio, video]
+    MeetingStatus:
+      type: string
+      enum: [scheduled, ended, cancelled]
+      description: |
+        `ended` is reserved for meetings the host ended during a call (not implemented yet). A scheduled
+        meeting whose end time has passed is treated as over.
+    MeetingHost:
+      type: object
+      required: [id, displayName]
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+    Invitee:
+      type: object
+      required: [id, displayName]
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        email:
+          type: string
+          format: email
+          description: Included only when the viewer is the host.
+    Meeting:
+      type: object
+      required:
+        [id, title, description, startsAt, durationMinutes, callType, status, role, host, invitees]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: [string, 'null']
+        startsAt:
+          type: string
+          format: date-time
+          description: UTC, for example `2026-12-01T15:00:00.000Z`.
+        durationMinutes:
+          type: integer
+        callType:
+          $ref: '#/components/schemas/CallType'
+        status:
+          $ref: '#/components/schemas/MeetingStatus'
+        role:
+          type: string
+          enum: [host, invitee]
+          description: The role of the user making the request.
+        host:
+          $ref: '#/components/schemas/MeetingHost'
+        invitees:
+          type: array
+          items:
+            $ref: '#/components/schemas/Invitee'
+    MeetingSummary:
+      type: object
+      description: A meeting in a list. It has the invitee count instead of the invitees.
+      required:
+        [
+          id,
+          title,
+          description,
+          startsAt,
+          durationMinutes,
+          callType,
+          status,
+          role,
+          host,
+          inviteeCount,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: [string, 'null']
+        startsAt:
+          type: string
+          format: date-time
+        durationMinutes:
+          type: integer
+        callType:
+          $ref: '#/components/schemas/CallType'
+        status:
+          $ref: '#/components/schemas/MeetingStatus'
+        role:
+          type: string
+          enum: [host, invitee]
+        host:
+          $ref: '#/components/schemas/MeetingHost'
+        inviteeCount:
+          type: integer
+          minimum: 0
+    MeetingList:
+      type: object
+      required: [items, limit, offset, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MeetingSummary'
+        limit:
+          type: integer
+        offset:
+          type: integer
+        total:
+          type: integer
+          description: Number of meetings matching the filter, across all pages.
+    CreateMeetingRequest:
+      type: object
+      additionalProperties: false
+      required: [title, startsAt, durationMinutes, callType]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: Trimmed by the server.
+          example: Weekly sync
+        description:
+          type: [string, 'null']
+          maxLength: 2000
+          description: Trimmed by the server; an empty text is stored as no description.
+        startsAt:
+          type: string
+          format: date-time
+          description: |
+            ISO 8601 with `Z` or an explicit offset (times without a zone are rejected); stored and returned
+            in UTC. Not in the past (one minute of tolerance) and at most one year ahead.
+          example: '2026-12-01T15:00:00Z'
+        durationMinutes:
+          type: integer
+          minimum: 5
+          maximum: 480
+        callType:
+          $ref: '#/components/schemas/CallType'
+    UpdateMeetingRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: Any subset of the creation fields, with the same rules. At least one field is required.
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: [string, 'null']
+          maxLength: 2000
+          description: '`null` clears the description; leaving the field out keeps it.'
+        startsAt:
+          type: string
+          format: date-time
+        durationMinutes:
+          type: integer
+          minimum: 5
+          maximum: 480
+        callType:
+          $ref: '#/components/schemas/CallType'
+    AddInviteeRequest:
+      type: object
+      additionalProperties: false
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Trimmed and lower-cased by the server.
+          example: guest@example.com
