@@ -1,12 +1,13 @@
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
-import { collectProblems, useAuthForm } from '../auth/useAuthForm';
+import { describeFailure } from '../auth/authErrors';
 import { useAuth } from '../auth/useAuth';
 import { Alert } from '../components/Alert';
 import { Button } from '../components/Button';
 import { TextField } from '../components/TextField';
 import { usePageTitle } from '../components/usePageTitle';
+import { collectProblems, useFormSubmission } from '../forms/useFormSubmission';
 import { useProblemText } from '../forms/useProblemText';
 import { validateEmail, validateExistingPassword } from '../forms/validation';
 import { AuthCard } from './AuthCard';
@@ -15,7 +16,7 @@ export function LoginPage() {
   const { t } = useTranslation();
   const { login, sessionExpired } = useAuth();
   const problemText = useProblemText();
-  const form = useAuthForm(['email', 'password']);
+  const form = useFormSubmission(['email', 'password'], describeFailure);
   usePageTitle(t('login.title'));
 
   const [email, setEmail] = useState('');

@@ -12,7 +12,16 @@ export type ValidationKey = keyof typeof en.validation;
 /** A problem with one field, as a translation key plus the numbers its text needs. */
 export type FieldProblem = { key: ValidationKey; values?: { min?: number; max?: number } };
 
-export type FormField = 'email' | 'password' | 'displayName';
+/** Every field of every form, so the shared form logic can point at the right input. */
+export type FormField =
+  | 'email'
+  | 'password'
+  | 'displayName'
+  | 'title'
+  | 'description'
+  | 'startsAt'
+  | 'durationMinutes'
+  | 'callType';
 
 // Deliberately lenient: something@something.tld without spaces. The server checks properly.
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

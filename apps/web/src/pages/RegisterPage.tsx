@@ -1,12 +1,13 @@
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
-import { collectProblems, useAuthForm } from '../auth/useAuthForm';
+import { describeFailure } from '../auth/authErrors';
 import { useAuth } from '../auth/useAuth';
 import { Alert } from '../components/Alert';
 import { Button } from '../components/Button';
 import { TextField } from '../components/TextField';
 import { usePageTitle } from '../components/usePageTitle';
+import { collectProblems, useFormSubmission } from '../forms/useFormSubmission';
 import { useProblemText } from '../forms/useProblemText';
 import {
   MIN_PASSWORD_LENGTH,
@@ -20,7 +21,7 @@ export function RegisterPage() {
   const { t } = useTranslation();
   const { register } = useAuth();
   const problemText = useProblemText();
-  const form = useAuthForm(['displayName', 'email', 'password']);
+  const form = useFormSubmission(['displayName', 'email', 'password'], describeFailure);
   usePageTitle(t('register.title'));
 
   const [displayName, setDisplayName] = useState('');

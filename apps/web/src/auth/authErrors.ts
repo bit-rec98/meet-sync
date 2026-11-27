@@ -1,18 +1,8 @@
 import { ApiError } from '../api/errors';
-import type { en } from '../i18n/locales/en';
+import type { FormFailure } from '../forms/failure';
 import { problemFromIssue, type FieldProblem, type FormField } from '../forms/validation';
 
-export type ErrorTextKey = keyof typeof en.errors;
-
-/**
- * What to tell the user about a failed login or registration: a message for the whole form, and/or
- * messages for specific fields. Expressed as translation keys, so it does not depend on the language.
- */
-export type FormFailure = {
-  form?: ErrorTextKey;
-  fields?: Partial<Record<FormField, FieldProblem>>;
-};
-
+/** What to tell the user about a failed login or registration. */
 export function describeFailure(error: unknown): FormFailure {
   if (!(error instanceof ApiError)) return { form: 'unexpected' };
 

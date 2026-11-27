@@ -1,21 +1,27 @@
 import { useRef, useState } from 'react';
-import type { FieldProblem, FormField } from '../forms/validation';
-import { describeFailure, type ErrorTextKey } from './authErrors';
+import type { ErrorTextKey, FormFailure } from './failure';
+import type { FieldProblem, FormField } from './validation';
 
 export type FieldProblems = Partial<Record<FormField, FieldProblem>>;
 
 /**
- * State shared by the login and registration forms: field problems, a form-level error, and a
- * pending flag that prevents double submission. On problems, focus moves to the first invalid field.
+ * State shared by the forms: field problems, a form-level error, and a pending flag that prevents
+ * double submission. On problems, focus moves to the first invalid field.
+ *
+ * @param fieldOrder the fields in the order they appear, to focus the first invalid one
+ * @param describe turns a failed submission into messages (each feature knows its own errors)
  */
-export function useAuthForm(fieldOrder: readonly FormField[]) {
+export function useFormSubmission(
+  fieldOrder: readonly FormField[],
+  describe: (error: unknown) => FormFailure,
+) {
   const [problems, setProblems] = useState<FieldProblems>({});
   const [formError, setFormError] = useState<ErrorTextKey | null>(null);
   const [pending, setPending] = useState(false);
-  const inputs = useRef<Partial<Record<FormField, HTMLInputElement | null>>>({});
+  const inputs = useRef<Partial<Record<FormField, HTMLElement | null>>>({});
 
   /** A callback ref for the input of a field. */
-  const inputRef = (field: FormField) => (element: HTMLInputElement | null) => {
+  const inputRef = (field: FormField) => (element: HTMLElement | null) => {
     inputs.current[field] = element;
   };
 
@@ -49,7 +55,7 @@ export function useAuthForm(fieldOrder: readonly FormField[]) {
     try {
       await action();
     } catch (error) {
-      const failure = describeFailure(error);
+      const failure = describe(error);
       show(failure.fields ?? {}, failure.form);
     } finally {
       setPending(false);
