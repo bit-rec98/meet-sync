@@ -156,7 +156,75 @@ export const en = {
       invited: '{{name}} was invited.',
       removed: '{{name}} was removed.',
     },
-    callsSoon: 'Joining calls will be available soon.',
+    join: 'Join call',
+    joinOpensAt: 'You can join from {{time}}.',
+  },
+  call: {
+    back: 'Back to the meeting',
+    lobby: {
+      heading: 'Ready to join?',
+      introVideo:
+        'Your browser will ask for access to your microphone and camera. The others in the call will see and hear you.',
+      introAudio:
+        'Your browser will ask for access to your microphone. The others in the call will hear you.',
+      joinVideo: 'Join with camera and microphone',
+      joinWithMicrophone: 'Join with microphone only',
+      joinAudio: 'Join with microphone',
+      connecting: 'Connecting…',
+      notOpenYet: 'You can join from {{time}}.',
+      over: 'This meeting is over, so it can no longer be joined.',
+      cancelled: 'This meeting was cancelled.',
+    },
+    startFailures: {
+      permission_denied:
+        'The browser does not allow access to your microphone or camera. Allow it in the site settings and try again.',
+      no_device: 'No microphone or camera was found. Connect one and try again.',
+      media_failed:
+        'Your microphone or camera could not be started. Another application may be using it.',
+      not_available: 'You cannot join this call right now.',
+      rate_limited: 'Too many attempts. Wait a moment and try again.',
+      network: 'The connection to the call could not be made. Check your connection and try again.',
+      unexpected: 'Something went wrong while joining. Try again.',
+    },
+    ended: {
+      heading: 'The call has ended for you',
+      rejoin: 'Rejoin',
+      reasons: {
+        left: 'You left the call.',
+        replaced: 'You joined this call from another tab or device, which replaced this one.',
+        removed: 'The host removed you from the meeting.',
+        meeting_cancelled: 'The host cancelled the meeting.',
+        server_shutdown: 'The service is restarting. Try joining again in a moment.',
+        connection_lost: 'The connection was lost.',
+        not_allowed: 'You cannot join this call.',
+        room_full: 'The call is full. Try again when someone leaves.',
+      },
+    },
+    room: {
+      label: 'Participants',
+      count_one: '{{count}} person in the call',
+      count_other: '{{count}} people in the call',
+      alone: 'You are the only one here for now.',
+    },
+    tile: {
+      you: '{{name}} (you)',
+      microphoneOff: 'Microphone off',
+      cameraOff: 'Camera off',
+      connecting: 'Connecting…',
+      failed: 'Connection problem',
+    },
+    controls: {
+      label: 'Call controls',
+      muteMicrophone: 'Mute microphone',
+      unmuteMicrophone: 'Turn microphone on',
+      turnCameraOff: 'Turn camera off',
+      turnCameraOn: 'Turn camera on',
+      leave: 'Leave call',
+    },
+    announce: {
+      joined: '{{name}} joined the call.',
+      left: '{{name}} left the call.',
+    },
   },
   invitees: {
     title: 'Invitees',

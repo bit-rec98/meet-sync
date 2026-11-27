@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router';
 import { RedirectIfAuthenticated, RequireAuth } from './auth/RouteGuards';
 import { Layout } from './components/Layout';
+import { CallPage } from './pages/CallPage';
 import { EditMeetingPage } from './pages/EditMeetingPage';
 import { LoginPage } from './pages/LoginPage';
 import { MeetingDetailPage } from './pages/MeetingDetailPage';
@@ -23,6 +24,7 @@ export function App() {
           <Route path="/meetings/new" element={<NewMeetingPage />} />
           <Route path="/meetings/:id" element={<MeetingDetailPage />} />
           <Route path="/meetings/:id/edit" element={<EditMeetingPage />} />
+          <Route path="/meetings/:id/call" element={<CallPage />} />
         </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Route>

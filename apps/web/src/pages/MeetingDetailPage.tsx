@@ -11,7 +11,7 @@ import type { ErrorTextKey } from '../forms/failure';
 import { InviteesSection } from '../meetings/InviteesSection';
 import { describeActionFailure, describeLoadFailure } from '../meetings/meetingErrors';
 import { MeetingBadges } from '../meetings/MeetingBadges';
-import { canEdit, isActive } from '../meetings/time';
+import { canEdit, canJoin, isActive, joinOpensAt } from '../meetings/time';
 import { useFlashNotice, withNotice } from '../meetings/useFlashNotice';
 import { useMeetingsApi } from '../meetings/useMeetingsApi';
 import { useMeetingText } from '../meetings/useMeetingText';
@@ -102,6 +102,7 @@ export function MeetingDetailPage() {
   const now = new Date();
   const isHost = meeting.role === 'host';
   const active = isActive(meeting, now);
+  const joinable = canJoin(meeting, now);
   const detailPath = `/meetings/${encodeURIComponent(meeting.id)}`;
 
   const noticeText = notice
@@ -166,7 +167,18 @@ export function MeetingDetailPage() {
         ) : null}
       </dl>
 
-      <div className="mt-6 flex flex-wrap gap-3">
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        {joinable ? (
+          <ButtonLink to={`${detailPath}/call`} variant="primary">
+            {t('meeting.join')}
+          </ButtonLink>
+        ) : active ? (
+          <p className="text-sm text-ink-muted">
+            {t('meeting.joinOpensAt', {
+              time: text.dateTime(joinOpensAt(meeting).toISOString(), 'long'),
+            })}
+          </p>
+        ) : null}
         {isHost && canEdit(meeting, now) ? (
           <ButtonLink to={`${detailPath}/edit`} variant="secondary">
             {t('meeting.edit')}
@@ -217,8 +229,6 @@ export function MeetingDetailPage() {
         }}
         onActionFailed={setActionError}
       />
-
-      {active ? <p className="mt-8 text-sm text-ink-muted">{t('meeting.callsSoon')}</p> : null}
     </article>
   );
 }

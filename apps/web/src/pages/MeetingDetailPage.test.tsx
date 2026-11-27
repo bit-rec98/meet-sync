@@ -89,7 +89,27 @@ describe('meeting details as the host', () => {
     );
     expect(screen.getByRole('button', { name: 'Cancel meeting' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Invite' })).toBeTruthy();
-    expect(screen.getByText('Joining calls will be available soon.')).toBeTruthy();
+  });
+
+  it('says when joining opens, instead of offering it, while the meeting is far away', async () => {
+    open(() => reply(200, hosted({ startsAt: inFuture(days(2)) })));
+    await screen.findByRole('heading', { name: 'Planning', level: 1 });
+    expect(screen.queryByRole('link', { name: 'Join call' })).toBeNull();
+    expect(screen.getByText(/^You can join from .+\.$/)).toBeTruthy();
+  });
+
+  it('offers joining from 15 minutes before the start', async () => {
+    const view = open(() => reply(200, hosted({ startsAt: inFuture(hours(0.25) + 60_000) })));
+    await screen.findByRole('heading', { name: 'Planning', level: 1 });
+    expect(screen.queryByRole('link', { name: 'Join call' })).toBeNull(); // 16 minutes: not yet
+    view.unmount();
+
+    open(() => reply(200, hosted({ startsAt: inFuture(hours(0.25) - 60_000) })));
+    await screen.findByRole('heading', { name: 'Planning', level: 1 });
+    expect(screen.getByRole('link', { name: 'Join call' }).getAttribute('href')).toBe(
+      '/meetings/m1/call',
+    );
+    expect(screen.queryByText(/You can join from/)).toBeNull();
   });
 
   it('shows the time zone the time is in', async () => {
@@ -107,6 +127,7 @@ describe('meeting details as the host', () => {
     expect(screen.getByRole('button', { name: 'Cancel meeting' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Invite' })).toBeTruthy();
     expect(screen.getByText('In progress')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Join call' })).toBeTruthy();
   });
 
   it('offers nothing to change once the meeting is over or cancelled, but invitees can still be removed', async () => {
@@ -119,7 +140,8 @@ describe('meeting details as the host', () => {
       expect(screen.queryByRole('link', { name: 'Edit' })).toBeNull();
       expect(screen.queryByRole('button', { name: 'Cancel meeting' })).toBeNull();
       expect(screen.queryByRole('button', { name: 'Invite' })).toBeNull();
-      expect(screen.queryByText('Joining calls will be available soon.')).toBeNull();
+      expect(screen.queryByRole('link', { name: 'Join call' })).toBeNull();
+      expect(screen.queryByText(/You can join from/)).toBeNull();
       expect(screen.getByRole('button', { name: 'Remove Gus Guest' })).toBeTruthy();
       view.unmount();
     }
@@ -143,6 +165,19 @@ describe('meeting details as an invitee', () => {
     expect(screen.queryByRole('button', { name: /^Remove/ })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Invite' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Leave meeting' })).toBeTruthy();
+  });
+
+  it('lets an invitee join too, once joining opens', async () => {
+    open(() => reply(200, asInvitee({ startsAt: inFuture(-hours(0.1)) })));
+    await screen.findByRole('heading', { name: 'Planning', level: 1 });
+    expect(screen.getByRole('link', { name: 'Join call' }).getAttribute('href')).toBe(
+      '/meetings/m1/call',
+    );
+  });
+
+  it('offers joining in Spanish', async () => {
+    open(() => reply(200, asInvitee({ startsAt: inFuture(-hours(0.1)) })), {}, { language: 'es' });
+    expect(await screen.findByRole('link', { name: 'Unirme a la llamada' })).toBeTruthy();
   });
 });
 

@@ -6,6 +6,8 @@ import { MemoryRouter } from 'react-router';
 import { App } from '../App';
 import type { User } from '../api/types';
 import { AuthProvider } from '../auth/AuthProvider';
+import { CallEnvironmentContext } from '../calls/environmentContext';
+import type { CallEnvironment } from '../calls/types';
 import { createI18n } from '../i18n';
 import type { Language } from '../i18n/language';
 import { apiError, createFakeApi, reply, type FakeApi, type Handler } from './fakeApi';
@@ -45,6 +47,8 @@ type RenderOptions = {
   strict?: boolean;
   /** Extra content rendered next to the routes, inside the providers. */
   extra?: ReactNode;
+  /** Replaces the browser's camera and WebRTC for the call screen. */
+  callEnvironment?: CallEnvironment;
   /** Router state the first page is opened with, as when another page navigates here. */
   state?: unknown;
 };
@@ -62,6 +66,7 @@ export function renderApp({
   language = 'en',
   strict = false,
   extra,
+  callEnvironment,
   state,
 }: RenderOptions) {
   const i18n = createI18n(language);
@@ -70,7 +75,9 @@ export function renderApp({
     <I18nextProvider i18n={i18n}>
       <MemoryRouter initialEntries={[{ ...splitRoute(route), state }]}>
         <AuthProvider fetch={api.fetch}>
-          <App />
+          <CallEnvironmentContext value={callEnvironment ?? null}>
+            <App />
+          </CallEnvironmentContext>
           {extra}
         </AuthProvider>
       </MemoryRouter>

@@ -158,7 +158,77 @@ export const es: Translations = {
       invited: 'Se invitó a {{name}}.',
       removed: 'Se quitó a {{name}}.',
     },
-    callsSoon: 'Pronto se podrá entrar a las llamadas.',
+    join: 'Unirme a la llamada',
+    joinOpensAt: 'Podrás unirte desde el {{time}}.',
+  },
+  call: {
+    back: 'Volver a la reunión',
+    lobby: {
+      heading: '¿Listo para unirte?',
+      introVideo:
+        'El navegador te pedirá acceso al micrófono y a la cámara. Las demás personas de la llamada te verán y te oirán.',
+      introAudio:
+        'El navegador te pedirá acceso al micrófono. Las demás personas de la llamada te oirán.',
+      joinVideo: 'Unirme con cámara y micrófono',
+      joinWithMicrophone: 'Unirme solo con micrófono',
+      joinAudio: 'Unirme con micrófono',
+      connecting: 'Conectando…',
+      notOpenYet: 'Podrás unirte desde el {{time}}.',
+      over: 'La reunión terminó, así que ya no se puede entrar.',
+      cancelled: 'Se canceló esta reunión.',
+    },
+    startFailures: {
+      permission_denied:
+        'El navegador no permite el acceso al micrófono o a la cámara. Permítelo en la configuración del sitio e inténtalo de nuevo.',
+      no_device: 'No se encontró ningún micrófono ni cámara. Conecta uno e inténtalo de nuevo.',
+      media_failed:
+        'No se pudo iniciar el micrófono o la cámara. Puede que otra aplicación los esté usando.',
+      not_available: 'No puedes unirte a esta llamada ahora.',
+      rate_limited: 'Demasiados intentos. Espera un momento e inténtalo de nuevo.',
+      network:
+        'No se pudo establecer la conexión con la llamada. Revisa tu conexión e inténtalo de nuevo.',
+      unexpected: 'Algo salió mal al unirte. Inténtalo de nuevo.',
+    },
+    ended: {
+      heading: 'La llamada terminó para ti',
+      rejoin: 'Volver a unirme',
+      reasons: {
+        left: 'Saliste de la llamada.',
+        replaced:
+          'Te uniste a esta llamada desde otra pestaña o dispositivo, que reemplazó a esta.',
+        removed: 'El anfitrión te quitó de la reunión.',
+        meeting_cancelled: 'El anfitrión canceló la reunión.',
+        server_shutdown: 'El servicio se está reiniciando. Intenta unirte de nuevo en un momento.',
+        connection_lost: 'Se perdió la conexión.',
+        not_allowed: 'No puedes unirte a esta llamada.',
+        room_full: 'La llamada está llena. Inténtalo de nuevo cuando alguien salga.',
+      },
+    },
+    room: {
+      label: 'Participantes',
+      count_one: '{{count}} persona en la llamada',
+      count_other: '{{count}} personas en la llamada',
+      alone: 'Por ahora eres la única persona aquí.',
+    },
+    tile: {
+      you: '{{name}} (tú)',
+      microphoneOff: 'Micrófono apagado',
+      cameraOff: 'Cámara apagada',
+      connecting: 'Conectando…',
+      failed: 'Problema de conexión',
+    },
+    controls: {
+      label: 'Controles de la llamada',
+      muteMicrophone: 'Silenciar micrófono',
+      unmuteMicrophone: 'Activar micrófono',
+      turnCameraOff: 'Apagar cámara',
+      turnCameraOn: 'Encender cámara',
+      leave: 'Salir de la llamada',
+    },
+    announce: {
+      joined: '{{name}} se unió a la llamada.',
+      left: '{{name}} salió de la llamada.',
+    },
   },
   invitees: {
     title: 'Invitados',
