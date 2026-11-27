@@ -6,7 +6,7 @@ import { assertDatabaseReachable, createPool } from './db/pool.js';
 const config = loadConfig();
 const pool = createPool(config.database);
 await assertDatabaseReachable(pool); // fail fast if the database is unreachable
-const server = createServer(createApp());
+const server = createServer(createApp({ pool, config }));
 
 server.listen(config.port, () => {
   console.info(`API listening on port ${config.port} (${config.nodeEnv})`);
