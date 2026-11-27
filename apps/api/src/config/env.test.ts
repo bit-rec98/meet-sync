@@ -35,7 +35,68 @@ describe('loadConfig', () => {
       webOrigins: ['http://localhost:5173'],
       trustProxyHops: 0,
       secureCookies: false,
+      signaling: {
+        maxParticipants: { audio: 10, video: 4 },
+        stunUrls: ['stun:stun.cloudflare.com:3478'],
+        turn: null,
+      },
     });
+  });
+
+  it('reads the room limits and rejects values that make no sense', () => {
+    const config = loadConfig({
+      ...runtimeEnv,
+      MAX_PARTICIPANTS_AUDIO: '8',
+      MAX_PARTICIPANTS_VIDEO: '6',
+    });
+    expect(config.signaling.maxParticipants).toEqual({ audio: 8, video: 6 });
+    for (const bad of ['1', '0', '-3', '51', '2.5', 'many']) {
+      expect(() => loadConfig({ ...runtimeEnv, MAX_PARTICIPANTS_VIDEO: bad }), bad).toThrow(
+        /MAX_PARTICIPANTS_VIDEO/,
+      );
+    }
+  });
+
+  it('reads several STUN servers, ignores blanks, and rejects values that are not STUN/TURN URLs', () => {
+    expect(
+      loadConfig({ ...runtimeEnv, STUN_URLS: 'stun:a.example:3478, stuns:b.example:5349 ,' })
+        .signaling.stunUrls,
+    ).toEqual(['stun:a.example:3478', 'stuns:b.example:5349']);
+    expect(loadConfig({ ...runtimeEnv, STUN_URLS: '' }).signaling.stunUrls).toEqual([]);
+    for (const bad of [
+      'https://a.example',
+      'stun.example.com',
+      'stun:',
+      'stun:a b',
+      'javascript:alert(1)',
+    ]) {
+      expect(() => loadConfig({ ...runtimeEnv, STUN_URLS: bad }), bad).toThrow(/STUN_URLS/);
+    }
+  });
+
+  it('enables TURN only with URLs and a shared secret, and requires both', () => {
+    const turnSecret = 't'.repeat(40);
+    const config = loadConfig({
+      ...runtimeEnv,
+      TURN_URLS: 'turn:relay.example:3478,turns:relay.example:5349',
+      TURN_SHARED_SECRET: turnSecret,
+    });
+    expect(config.signaling.turn).toEqual({
+      urls: ['turn:relay.example:3478', 'turns:relay.example:5349'],
+      sharedSecret: turnSecret,
+    });
+
+    const withoutSecret = () => loadConfig({ ...runtimeEnv, TURN_URLS: 'turn:relay.example:3478' });
+    expect(withoutSecret).toThrow(/TURN_SHARED_SECRET/);
+    const shortSecret = () =>
+      loadConfig({
+        ...runtimeEnv,
+        TURN_URLS: 'turn:relay.example:3478',
+        TURN_SHARED_SECRET: 'short-secret',
+      });
+    expect(shortSecret).toThrow(/TURN_SHARED_SECRET/);
+    expect(shortSecret).not.toThrow(/short-secret/);
+    expect(loadConfig({ ...runtimeEnv, TURN_SHARED_SECRET: turnSecret }).signaling.turn).toBeNull();
   });
 
   it('reads explicit values', () => {
