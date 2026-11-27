@@ -6,11 +6,18 @@ It is also a learning project for **WebSockets** and **WebRTC**.
 ## Status
 
 **Early development.** The project was restarted from scratch after the previous implementation
-was lost. Features listed under "Planned features" are **not implemented yet**.
+was lost.
+
+**Implemented:** accounts through the REST API (register, log in, refresh, log out, current user)
+with rate limiting; there is no user interface for them yet.
+**Not implemented yet:** everything else under "Planned features".
+
+## Features
+
+- Implemented: accounts (register, log in, log out, session refresh). See [Authentication](#authentication).
 
 ## Planned features
 
-- Accounts (register, log in, log out).
 - Schedule, edit, cancel, and list meetings; invite registered users (invited users only, no guests).
 - Join a meeting as an audio call or a video call, with mute and camera controls.
 - Real-time presence and WebRTC signaling over WebSockets.
@@ -21,14 +28,14 @@ above the video participant limit.
 
 ## Technology stack
 
-| Area             | Technology                                                                                   | In the code today  |
-| ---------------- | -------------------------------------------------------------------------------------------- | ------------------ |
-| Frontend         | React, Vite, TypeScript                                                                      | Yes (placeholder)  |
-| Backend          | Node.js, Express, TypeScript                                                                 | Yes (health route) |
-| WebSockets       | `ws`                                                                                         | Not yet            |
-| Database         | MySQL (local via Docker)                                                                     | Container only     |
-| Real-time media  | WebRTC (peer-to-peer mesh)                                                                   | Not yet            |
-| Frontend hosting | Netlify (the backend runs on a separate host that supports long-lived WebSocket connections) | Not yet            |
+| Area             | Technology                                                                                   | In the code today     |
+| ---------------- | -------------------------------------------------------------------------------------------- | --------------------- |
+| Frontend         | React, Vite, TypeScript                                                                      | Yes (placeholder)     |
+| Backend          | Node.js, Express, TypeScript                                                                 | Yes (health, auth)    |
+| WebSockets       | `ws`                                                                                         | Not yet               |
+| Database         | MySQL (local via Docker), `mysql2`                                                           | Yes (users, sessions) |
+| Real-time media  | WebRTC (peer-to-peer mesh)                                                                   | Not yet               |
+| Frontend hosting | Netlify (the backend runs on a separate host that supports long-lived WebSocket connections) | Not yet               |
 
 ## Architecture overview
 
@@ -58,7 +65,8 @@ npm run migrate -w @meet-sync/api   # creates the schema in the development data
 ```
 
 Configuration is documented in [`.env.example`](.env.example). Required variables have no default;
-the API refuses to start if one is missing or invalid.
+the API refuses to start if one is missing or invalid. Generate the access-token signing key with
+`openssl rand -hex 32` and put it in `JWT_ACCESS_SECRET`.
 
 The local database has three accounts, created on the first start of the container:
 
@@ -75,6 +83,20 @@ passwords in `.env`, recreate the volume with `docker compose down -v` (this del
 npm run dev:api   # API on http://localhost:3000, health check at /api/v1/health
 npm run dev:web   # web app on http://localhost:5173, proxies /api to the API
 ```
+
+## Authentication
+
+The REST API (base path `/api/v1/auth`) is described in [`apps/api/openapi.yaml`](apps/api/openapi.yaml).
+
+- **Passwords:** 12 to 128 characters, hashed with Argon2id. Plain passwords are never stored or logged.
+- **Access token:** a JWT valid for 15 minutes, sent as `Authorization: Bearer <token>` and kept in memory by the client.
+- **Refresh token:** an opaque random value in an `HttpOnly`, `SameSite=Strict` cookie limited to `/api/v1/auth`
+  (`Secure` in production). It is stored only as a SHA-256 hash and rotated on every use. Presenting a token
+  that was already rotated revokes that whole session.
+- **Rate limits** (in memory, per API process): 5 registrations per hour per address; failed logins are limited
+  to 10 per 15 minutes per address and 5 per 15 minutes per email; 30 refreshes per 15 minutes per address.
+  Behind a reverse proxy, set `TRUST_PROXY_HOPS` so limits apply to real client addresses.
+- **Not included yet:** email verification, password reset, multi-factor authentication.
 
 ## Testing and quality checks
 
@@ -94,8 +116,12 @@ whose name does not end in `_test`. The same checks run in CI (`.github/workflow
 
 ```text
 apps/api   Express API (and, later, the WebSocket signaling server)
-           src/config  environment parsing and validation
-           src/db      connection pool, migration runner, SQL migrations
+           src/config        environment parsing and validation
+           src/db            connection pool, transactions, migration runner, SQL migrations
+           src/repositories  SQL access (parameterized queries only)
+           src/services      business rules (authentication, password hashing, tokens)
+           src/http          routes, middleware (validation, rate limits, auth), error handling
+           openapi.yaml      API description
 apps/web   React single-page app
 docker/    local MySQL account setup script
 ```

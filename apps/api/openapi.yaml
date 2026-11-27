@@ -1,0 +1,402 @@
+openapi: 3.1.0
+info:
+  title: MeetSync API
+  version: 0.1.0
+  description: |
+    REST API of MeetSync. Currently covers authentication and a health check; meetings are not
+    implemented yet.
+
+    **Authentication model.** `register` and `login` return a short-lived access token (JWT, 15 minutes)
+    in the body and set a refresh token in an `HttpOnly` cookie. Send the access token as
+    `Authorization: Bearer <token>`. When it expires, call `refresh`, which rotates the refresh cookie.
+
+    **Errors** always use the shape of the `ErrorResponse` schema. Messages are generic and never include
+    submitted values.
+
+    **Rate limits** apply to register, login and refresh (see each operation); exceeded limits answer
+    `429` with a `Retry-After` header.
+servers:
+  - url: /api/v1
+    description: Same origin as the web app (Netlify proxies /api to the API host in production).
+tags:
+  - name: Health
+  - name: Authentication
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness check
+      responses:
+        '200':
+          description: The API process is running.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    const: ok
+  /auth/register:
+    post:
+      tags: [Authentication]
+      summary: Create an account and start a session
+      description: |
+        Limited to 5 requests per hour per client address. The email is trimmed and lower-cased by the
+        server. Fails with `409` if the email is already registered (this reveals that the email has an
+        account; there is no email verification yet).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/SessionStarted'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          description: An account with this email already exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: email_taken
+                  message: An account with this email already exists.
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Log in and start a session
+      description: |
+        Only failed attempts count towards the limits: 10 per 15 minutes per client address and 5 per
+        15 minutes per email. Once a limit is reached, further attempts are refused (even with the right
+        password) until the window ends. A wrong password and an unknown email produce the same response.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/SessionStarted'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: Wrong email or password.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: invalid_credentials
+                  message: Invalid email or password.
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Get a new access token and rotate the refresh token
+      description: |
+        Needs the refresh cookie. The cookie is single-use: the response sets a new one. Presenting a
+        cookie that was already used revokes the whole session (all later tokens of that login), because
+        it indicates the cookie may have been stolen. A rejected cookie is cleared in the response.
+        Limited to 30 requests per 15 minutes per client address. If the request carries an `Origin`
+        header, it must be one of the configured web origins.
+      security:
+        - refreshCookie: []
+      responses:
+        '200':
+          description: New access token; the refresh cookie was rotated.
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/SetRefreshCookie'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [accessToken]
+                properties:
+                  accessToken:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: End the current session
+      description: |
+        Revokes the session of the refresh cookie (if any) and clears the cookie. Always answers `204`,
+        also when the cookie is missing, unknown or already revoked. If the request carries an `Origin`
+        header, it must be one of the configured web origins.
+      security:
+        - refreshCookie: []
+        - {}
+      responses:
+        '204':
+          description: Logged out. The refresh cookie is cleared.
+          headers:
+            Set-Cookie:
+              description: Clears the refresh cookie (expired in the past).
+              schema:
+                type: string
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /auth/me:
+    get:
+      tags: [Authentication]
+      summary: Current user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The authenticated user.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          description: Missing, malformed, invalid or expired access token. The reason is never disclosed.
+          headers:
+            WWW-Authenticate:
+              schema:
+                type: string
+                const: Bearer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: unauthorized
+                  message: Authentication required.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token returned by register, login, or refresh. Valid for 15 minutes.
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: refresh_token
+      description: |
+        Set by the server (`HttpOnly`, `SameSite=Strict`, `Path=/api/v1/auth`, `Secure` in production,
+        valid for 7 days). Browsers send it automatically; scripts cannot read it.
+  headers:
+    NoStore:
+      description: Responses that carry tokens or personal data must not be cached.
+      schema:
+        type: string
+        const: no-store
+    SetRefreshCookie:
+      description: |
+        Sets the refresh cookie: `refresh_token=<opaque token>; Max-Age=604800; Path=/api/v1/auth;
+        HttpOnly; SameSite=Strict` (plus `Secure` in production).
+      schema:
+        type: string
+  responses:
+    SessionStarted:
+      description: Session started. The access token is in the body; the refresh token is in the cookie.
+      headers:
+        Set-Cookie:
+          $ref: '#/components/headers/SetRefreshCookie'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [user, accessToken]
+            properties:
+              user:
+                $ref: '#/components/schemas/User'
+              accessToken:
+                type: string
+    ValidationError:
+      description: |
+        The body is missing, is not valid JSON, has unknown fields, or breaks a field rule. `details`
+        names each field and the broken rule, never the submitted value.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: validation_error
+              message: Invalid request.
+              details:
+                - path: password
+                  code: too_small
+    Unauthorized:
+      description: Missing, invalid, expired, or already used refresh cookie.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: unauthorized
+              message: Authentication required.
+    Forbidden:
+      description: The request's `Origin` is not an allowed web origin.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: forbidden
+              message: You do not have permission to do this.
+    PayloadTooLarge:
+      description: The request body is larger than 100 kB.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: payload_too_large
+              message: Request body is too large.
+    UnsupportedMediaType:
+      description: The body is not `application/json`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: unsupported_media_type
+              message: Content-Type must be application/json.
+    RateLimited:
+      description: Too many requests.
+      headers:
+        Retry-After:
+          description: Seconds until the limit resets.
+          schema:
+            type: integer
+            minimum: 1
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: rate_limited
+              message: Too many requests. Try again later.
+  schemas:
+    User:
+      type: object
+      required: [id, email, displayName]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      required: [email, displayName, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Trimmed and lower-cased by the server.
+          example: ana@example.com
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 60
+          description: Trimmed by the server; control characters are not allowed.
+          example: Ana
+        password:
+          type: string
+          minLength: 12
+          maxLength: 128
+          description: Not trimmed or altered. Any characters are allowed.
+          writeOnly: true
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          example: ana@example.com
+        password:
+          type: string
+          minLength: 1
+          maxLength: 128
+          writeOnly: true
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum:
+                - validation_error
+                - invalid_credentials
+                - unauthorized
+                - forbidden
+                - not_found
+                - email_taken
+                - payload_too_large
+                - unsupported_media_type
+                - rate_limited
+                - internal_error
+            message:
+              type: string
+            details:
+              type: array
+              description: Only present for `validation_error`.
+              items:
+                type: object
+                required: [path, code]
+                properties:
+                  path:
+                    type: string
+                    description: Field name, empty for the whole body.
+                  code:
+                    type: string
+                    description: The rule that failed, for example `too_small` or `invalid_format`.
