@@ -72,10 +72,6 @@ export const es: Translations = {
     inviteeLimit: 'La reunión ya tiene el máximo de invitados.',
     loadFailed: 'No se pudo cargar la información.',
   },
-  home: {
-    greeting: 'Te damos la bienvenida, {{name}}',
-    placeholder: 'Tus reuniones aparecerán aquí pronto.',
-  },
   meetings: {
     title: 'Reuniones',
     new: 'Nueva reunión',

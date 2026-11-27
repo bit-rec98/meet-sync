@@ -32,7 +32,7 @@ describe('session restore', () => {
 
   it('shows the start page, with the user’s name and a logout button, when the session is valid', async () => {
     const { api } = renderApp({ api: signedInApi() });
-    expect(await screen.findByRole('heading', { name: 'Welcome, Ana García' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Meetings' })).toBeTruthy();
     expect(screen.getByText('Signed in as Ana García')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Log out' })).toBeTruthy();
     expect(api.calls[1]?.headers.get('Authorization')).toBe('Bearer access-token-1');
@@ -48,12 +48,12 @@ describe('session restore', () => {
       }),
     });
     expect(screen.getByRole('status').textContent).toBe('Loading…');
-    expect(await findByRole('heading', { name: /Welcome/ })).toBeTruthy();
+    expect(await findByRole('heading', { name: 'Meetings' })).toBeTruthy();
   });
 
   it('refreshes only once under React StrictMode, which runs effects twice', async () => {
     const { api } = renderApp({ api: signedInApi(), strict: true });
-    await screen.findByRole('heading', { name: /Welcome/ });
+    await screen.findByRole('heading', { name: 'Meetings' });
     expect(callsTo(api, REFRESH)).toBe(1); // a second use of the cookie would end the session
   });
 
@@ -64,7 +64,7 @@ describe('session restore', () => {
 
   it('sends a signed-in user away from the login and register pages', async () => {
     renderApp({ api: signedInApi(), route: '/login' });
-    expect(await screen.findByRole('heading', { name: /Welcome/ })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Meetings' })).toBeTruthy();
   });
 
   it('shows a not-found page with a way back', async () => {
@@ -87,7 +87,7 @@ describe('login', () => {
     await user.type(screen.getByLabelText('Password'), 'a password with spaces ');
     await user.click(screen.getByRole('button', { name: 'Log in' }));
 
-    expect(await screen.findByRole('heading', { name: 'Welcome, Ana García' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Meetings' })).toBeTruthy();
     const loginCall = api.calls.find((call) => call.path === '/api/v1/auth/login');
     expect(loginCall?.body).toEqual({
       email: 'ana@example.test',
@@ -101,7 +101,7 @@ describe('login', () => {
     await user.type(await screen.findByLabelText('Email'), 'ana@example.test');
     await user.type(screen.getByLabelText('Password'), 'whatever');
     await user.click(screen.getByRole('button', { name: 'Log in' }));
-    expect(await screen.findByRole('heading', { name: /Welcome/ })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Meetings' })).toBeTruthy();
   });
 
   it('explains wrong credentials in the user’s language, never with the server’s English text', async () => {
@@ -189,7 +189,7 @@ describe('login', () => {
     expect(callsTo(api, LOGIN)).toBe(1);
 
     release();
-    expect(await screen.findByRole('heading', { name: /Welcome/ })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Meetings' })).toBeTruthy();
   });
 
   it('uses the right autocomplete hints so password managers work', async () => {
@@ -207,7 +207,7 @@ describe('login', () => {
     await user.type(await screen.findByLabelText('Email'), 'ana@example.test');
     await user.type(screen.getByLabelText('Password'), 'my-very-secret-password');
     await user.click(screen.getByRole('button', { name: 'Log in' }));
-    await screen.findByRole('heading', { name: /Welcome/ });
+    await screen.findByRole('heading', { name: 'Meetings' });
 
     expect(document.body.innerHTML).not.toContain('my-very-secret-password');
     expect(document.body.innerHTML).not.toContain('secret-access-token');
@@ -228,7 +228,7 @@ describe('registration', () => {
     await user.type(screen.getByLabelText('Password'), 'correct horse battery');
     await user.click(screen.getByRole('button', { name: 'Create account' }));
 
-    expect(await screen.findByRole('heading', { name: 'Welcome, Ana García' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Meetings' })).toBeTruthy();
     const call = api.calls.find((entry) => entry.path === '/api/v1/auth/register');
     expect(call?.body).toEqual({
       displayName: 'Ana García',
@@ -360,7 +360,7 @@ describe('logout and expired sessions', () => {
       );
     }
     const { user } = renderApp({ api, extra: <ExpireButton /> });
-    await screen.findByRole('heading', { name: /Welcome/ });
+    await screen.findByRole('heading', { name: 'Meetings' });
     await user.click(screen.getByRole('button', { name: 'call the API' }));
 
     expect(await screen.findByRole('heading', { name: 'Log in' })).toBeTruthy();
@@ -407,12 +407,10 @@ describe('language', () => {
     window.localStorage.clear();
   });
 
-  it('keeps the user’s name intact in both languages', async () => {
+  it('keeps the user’s name intact in the page header, rendered as text', async () => {
     renderApp({ api: signedInApi({ ...ANA, displayName: 'A & B <i>' }), language: 'es' });
-    expect(
-      await screen.findByRole('heading', { name: 'Te damos la bienvenida, A & B <i>' }),
-    ).toBeTruthy();
-    expect(document.querySelector('main i')).toBeNull(); // rendered as text, not as markup
+    expect(await screen.findByText('Sesión iniciada como A & B <i>')).toBeTruthy();
+    expect(document.querySelector('header i')).toBeNull(); // not interpreted as markup
   });
 });
 

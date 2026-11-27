@@ -1,8 +1,11 @@
 import { Route, Routes } from 'react-router';
 import { RedirectIfAuthenticated, RequireAuth } from './auth/RouteGuards';
 import { Layout } from './components/Layout';
-import { HomePage } from './pages/HomePage';
+import { EditMeetingPage } from './pages/EditMeetingPage';
 import { LoginPage } from './pages/LoginPage';
+import { MeetingDetailPage } from './pages/MeetingDetailPage';
+import { MeetingsPage } from './pages/MeetingsPage';
+import { NewMeetingPage } from './pages/NewMeetingPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { RegisterPage } from './pages/RegisterPage';
 
@@ -16,7 +19,10 @@ export function App() {
           <Route path="/register" element={<RegisterPage />} />
         </Route>
         <Route element={<RequireAuth />}>
-          <Route index element={<HomePage />} />
+          <Route index element={<MeetingsPage />} />
+          <Route path="/meetings/new" element={<NewMeetingPage />} />
+          <Route path="/meetings/:id" element={<MeetingDetailPage />} />
+          <Route path="/meetings/:id/edit" element={<EditMeetingPage />} />
         </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Route>

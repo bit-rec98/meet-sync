@@ -70,10 +70,6 @@ export const en = {
     inviteeLimit: 'The meeting already has the maximum number of invitees.',
     loadFailed: 'The information could not be loaded.',
   },
-  home: {
-    greeting: 'Welcome, {{name}}',
-    placeholder: 'Your meetings will appear here soon.',
-  },
   meetings: {
     title: 'Meetings',
     new: 'New meeting',
