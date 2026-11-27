@@ -3,6 +3,20 @@ import { z } from 'zod';
 const portSchema = z.coerce.number().int().min(1).max(65535);
 const nonEmpty = z.string().min(1);
 
+function isOrigin(value: string): boolean {
+  try {
+    return new URL(value).origin === value;
+  } catch {
+    return false;
+  }
+}
+
+/** Comma-separated list of origins such as `https://app.example.com` (no path, no trailing slash). */
+const originListSchema = z
+  .string()
+  .transform((value) => value.split(',').map((entry) => entry.trim()))
+  .refine((origins) => origins.length > 0 && origins.every(isOrigin));
+
 const runtimeEnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   API_PORT: portSchema.default(3000),
@@ -11,6 +25,11 @@ const runtimeEnvSchema = z.object({
   DB_NAME: nonEmpty,
   DB_USER: nonEmpty,
   DB_PASSWORD: nonEmpty,
+  // HS256 signing key for access tokens: at least 32 characters of random data.
+  JWT_ACCESS_SECRET: z.string().min(32),
+  WEB_ORIGINS: originListSchema,
+  // Number of reverse proxies in front of the API whose X-Forwarded-For header is trusted.
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
 });
 
 const migrationEnvSchema = z.object({
@@ -33,6 +52,12 @@ export type AppConfig = {
   nodeEnv: 'development' | 'test' | 'production';
   port: number;
   database: DatabaseConfig;
+  accessTokenSecret: string;
+  /** Origins of the web app allowed to call cookie-authenticated routes. */
+  webOrigins: string[];
+  trustProxyHops: number;
+  /** Refresh-cookie `Secure` attribute: on in production, off for local development and tests. */
+  secureCookies: boolean;
 };
 
 /**
@@ -61,6 +86,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       user: parsed.DB_USER,
       password: parsed.DB_PASSWORD,
     },
+    accessTokenSecret: parsed.JWT_ACCESS_SECRET,
+    webOrigins: parsed.WEB_ORIGINS,
+    trustProxyHops: parsed.TRUST_PROXY_HOPS,
+    secureCookies: parsed.NODE_ENV === 'production',
   };
 }
 
