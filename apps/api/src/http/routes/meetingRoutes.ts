@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import type { MeetingEvents } from '../../meetingEvents.js';
 import type { AuthService } from '../../services/authService.js';
 import type { MeetingService } from '../../services/meetingService.js';
 import { toInviteeDto, toMeetingDto, toMeetingSummaryDto } from '../meetingDtos.js';
@@ -20,6 +21,8 @@ export type MeetingRouterDependencies = {
   auth: AuthService;
   meetings: MeetingService;
   limiters: RateLimiters;
+  /** Told about changes that must also reach people who are in a call. */
+  events: MeetingEvents;
 };
 
 /**
@@ -30,6 +33,7 @@ export function createMeetingRouter({
   auth,
   meetings,
   limiters,
+  events,
 }: MeetingRouterDependencies): Router {
   const router = Router();
   router.use(requireAuth(auth)); // every meeting route needs a logged-in user
@@ -66,6 +70,7 @@ export function createMeetingRouter({
   router.delete('/:id', async (req, res) => {
     const { id } = parseParams(meetingParamsSchema, req.params);
     await meetings.cancel(getAuthenticatedUserId(res), id);
+    events.meetingCancelled(id); // ends the call for anyone in it
     res.status(204).end();
   });
 
@@ -79,6 +84,7 @@ export function createMeetingRouter({
   router.delete('/:id/invitees/:userId', async (req, res) => {
     const { id, userId } = parseParams(inviteeParamsSchema, req.params);
     await meetings.removeInvitee(getAuthenticatedUserId(res), id, userId);
+    events.inviteeRemoved(id, userId); // a removed person (or one who left) is disconnected from the call
     res.status(204).end();
   });
 

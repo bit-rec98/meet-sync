@@ -10,6 +10,8 @@ export type RateLimitSettings = {
   loginPerEmail: RateLimitRule;
   refresh: RateLimitRule;
   invite: RateLimitRule;
+  /** Tickets for opening a call connection, and the ICE server list. */
+  signaling: RateLimitRule;
 };
 
 const MINUTE_MS = 60 * 1000;
@@ -24,6 +26,7 @@ export const DEFAULT_RATE_LIMITS: RateLimitSettings = {
   loginPerEmail: { windowMs: 15 * MINUTE_MS, limit: 5 },
   refresh: { windowMs: 15 * MINUTE_MS, limit: 30 },
   invite: { windowMs: 60 * MINUTE_MS, limit: 30 },
+  signaling: { windowMs: MINUTE_MS, limit: 30 },
 };
 
 export type RateLimiters = {
@@ -32,6 +35,7 @@ export type RateLimiters = {
   loginPerEmail: RequestHandler;
   refresh: RequestHandler;
   invite: RequestHandler;
+  signaling: RequestHandler;
 };
 
 const MAX_EMAIL_KEY_LENGTH = 254;
@@ -93,5 +97,6 @@ export function createRateLimiters(settings: RateLimitSettings): RateLimiters {
     }),
     refresh: limiter(settings.refresh, { keyGenerator: clientKey }),
     invite: limiter(settings.invite, { keyGenerator: userOrClientKey }),
+    signaling: limiter(settings.signaling, { keyGenerator: userOrClientKey }),
   };
 }

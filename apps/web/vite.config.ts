@@ -7,7 +7,8 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
-    proxy: { '/api': 'http://localhost:3000' },
+    // ws: true lets the signaling WebSocket (/api/v1/ws) through the same rule as REST.
+    proxy: { '/api': { target: 'http://localhost:3000', ws: true } },
   },
   test: {
     environment: 'jsdom',
