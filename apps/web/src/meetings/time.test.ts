@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { MeetingStatus } from '../api/meetingsApi';
 import {
   canEdit,
+  canJoin,
+  joinOpensAt,
   durationParts,
   formatDateTime,
   fromLocalInputValue,
@@ -99,6 +101,26 @@ describe('what the host may still do', () => {
     expect(isActive(meeting(), at('2026-12-01T16:00:00.000Z'))).toBe(false);
     expect(isActive(meeting('cancelled'), at('2026-11-01T00:00:00.000Z'))).toBe(false);
     expect(isActive(meeting('ended'), at('2026-11-01T00:00:00.000Z'))).toBe(false);
+  });
+});
+
+describe('canJoin', () => {
+  it('opens exactly 15 minutes before the start', () => {
+    expect(joinOpensAt(meeting()).toISOString()).toBe('2026-12-01T14:45:00.000Z');
+    expect(canJoin(meeting(), at('2026-12-01T14:44:59.999Z'))).toBe(false);
+    expect(canJoin(meeting(), at('2026-12-01T14:45:00.000Z'))).toBe(true);
+  });
+
+  it('stays open during the meeting and closes at the end instant', () => {
+    expect(canJoin(meeting(), at('2026-12-01T15:30:00.000Z'))).toBe(true);
+    expect(canJoin(meeting(), at('2026-12-01T15:59:59.999Z'))).toBe(true);
+    expect(canJoin(meeting(), at('2026-12-01T16:00:00.000Z'))).toBe(false);
+  });
+
+  it('is never open for cancelled or ended meetings', () => {
+    for (const status of ['cancelled', 'ended'] as const) {
+      expect(canJoin(meeting(status), at('2026-12-01T15:30:00.000Z'))).toBe(false);
+    }
   });
 });
 

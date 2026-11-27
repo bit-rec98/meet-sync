@@ -25,6 +25,26 @@ export function canEdit(meeting: Timed, now: Date): boolean {
   return meeting.status === 'scheduled' && now.getTime() < startMs(meeting);
 }
 
+/** People can join a call from this many minutes before the start. */
+export const JOIN_OPENS_MINUTES_BEFORE_START = 15;
+
+/** When the join window opens. */
+export function joinOpensAt(meeting: Timed): Date {
+  return new Date(startMs(meeting) - JOIN_OPENS_MINUTES_BEFORE_START * MINUTE_MS);
+}
+
+/**
+ * Whether a call can be joined now: a scheduled meeting, from 15 minutes before its start until its
+ * end (the end instant excluded). The API applies the same rule and stays the authority.
+ */
+export function canJoin(meeting: Timed, now: Date): boolean {
+  return (
+    meeting.status === 'scheduled' &&
+    now.getTime() >= joinOpensAt(meeting).getTime() &&
+    now.getTime() < endMs(meeting)
+  );
+}
+
 /** Scheduled and not over: it can still be cancelled and receive invitations. */
 export function isActive(meeting: Timed, now: Date): boolean {
   return meeting.status === 'scheduled' && now.getTime() < endMs(meeting);
